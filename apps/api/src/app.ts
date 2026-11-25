@@ -32,9 +32,9 @@ export function buildApi(dependencies: {
   });
 
   app.register(swagger, {
-    openapi: { openapi: '3.0.3', info: { title: 'Venprox API', version: '0.1.0', description: 'Contratos HTTP do backend Venprox. Limite geral: 64 KiB, profundidade 16, arrays até 100 itens. /sync/push tem limite próprio de 512 KiB/50 operações; recepção operacional bloqueada até B11. Mutações financeiras locais via IPC.' },
-      tags: [{ name: 'System', description: 'Liveness e compatibilidade de versões.' }, { name: 'Identity', description: 'Setup, sessões, usuários e terminais.' },
-        {name:'Catalog',description:'Categorias, produtos e clientes versionados.'},{name:'Settings',description:'Preferências e escopo da política de estoque.'},{name:'Stock',description:'Livro e projeções recebidos pelo servidor.'},{name:'Sync',description:'Recepção idempotente autenticada por terminal; liberação depende de B11.'}],
+    openapi: { openapi: '3.0.3', info: { title: 'Venprox API', version: '0.1.0', description: 'Contratos HTTP do backend Venprox. Limite geral: 64 KiB, profundidade 16, arrays até 100 itens. /sync/push tem limite próprio de 512 KiB/50 operações e publicação atômica. Download com cursor e snapshots imutáveis B11; instalação/sincronizador local em B12. Mutações financeiras locais via IPC.' },
+      tags: [{ name: 'System', description: 'Liveness e compatibilidade de versões.' },{name:'Jobs',description:'Exportações assíncronas, leases e retentativas auditadas.'}, { name: 'Identity', description: 'Setup, sessões, usuários e terminais.' },
+        {name:'Catalog',description:'Categorias, produtos e clientes versionados.'},{name:'Settings',description:'Preferências e escopo da política de estoque.'},{name:'Stock',description:'Livro e projeções recebidos pelo servidor.'},{name:'Sync',description:'Recepção idempotente, log ordenado e capturas imutáveis autenticadas por terminal.'}],
       components: { securitySchemes: { sessionCookie: { type: 'apiKey', in: 'cookie', name: 'venprox_access' },deviceCredential:{type:'apiKey',in:'header',name:'X-Device-Credential'} } }, },
   });
   if (dependencies.environment === 'development') {

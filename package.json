@@ -41,7 +41,12 @@
     "test:business": "node --env-file=.env.b03 --import tsx --test tests/business.test.ts",
     "financial:test:setup": "node --env-file=.env.b03 --import tsx scripts/setup-financial-tests.ts",
     "test:financial": "node --env-file=.env.b03 --import tsx --test tests/cash.test.ts tests/sales.test.ts tests/reversals.test.ts tests/financial-process.test.ts",
-    "test:sync": "node --env-file=.env.b03 --import tsx --test tests/sync.test.ts"
+    "test:sync": "node --env-file=.env.b03 --import tsx --test tests/sync.test.ts",
+    "test:publication": "node --env-file=.env.b03 --import tsx --test tests/publication.test.ts",
+    "test:local-sync": "node --env-file=.env.b03 --import tsx --test tests/local-sync.test.ts",
+    "test:sync-coordinator": "node --env-file=.env.b03 --import tsx --test tests/sync-coordinator.test.ts tests/sync-process.test.ts",
+    "test:jobs": "node --env-file=.env.b03 --import tsx --test tests/jobs.test.ts",
+    "benchmark:b13": "node --env-file=.env.b03 --import tsx scripts/benchmark-b13.ts"
   },
   "dependencies": {
     "@fastify/cookie": "11.1.5",

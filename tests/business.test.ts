@@ -48,7 +48,10 @@ async function fixture(engine:'sqlite'|'mysql'){
   if(engine==='mysql'){assert.equal(process.env.MYSQL_HOST,'127.0.0.1');assert.equal(process.env.MYSQL_PORT,'3308');await clearMysql('venprox_b05_test');}
   const store=engine==='sqlite'?SqliteStore.open(join(directory,'terminal.db'),{store_id:storeId,device_id:deviceId},true):await MysqlStore.connect(sqlOptions('venprox_b05_test'),{store_id:storeId});
   await store.migrate();await store.provisionIdentity();
-  const deps:BusinessDependencies={unitOfWork:store instanceof SqliteStore?sqliteBusinessUnitOfWork(store):mysqlBusinessUnitOfWork(store),storeId,deviceId,local:false,remoteWritesEnabled:true,clock:{now:()=>new Date(now)},ids:{generate:randomUUID},hash:businessHash};
+  const base=store instanceof SqliteStore?sqliteBusinessUnitOfWork(store):mysqlBusinessUnitOfWork(store);
+  // This SQLite fixture seeds accepted catalog; B11 publication is proved on MySQL.
+  const unitOfWork:BusinessDependencies['unitOfWork']=store instanceof SqliteStore?{run:(work)=>base.run((tx)=>work({...tx,publication:{publish:async()=>{}}}))}:base;
+  const deps:BusinessDependencies={unitOfWork,storeId,deviceId,local:false,remoteWritesEnabled:true,clock:{now:()=>new Date(now)},ids:{generate:randomUUID},hash:businessHash};
   const context:BusinessContext={store_id:storeId,device_id:deviceId,user_id:randomUUID(),permissions,permissions_version:1,authorization_id:randomUUID(),authorization_origin:'online',authorized_at:now,expires_at:'2026-11-26T12:00:00.000Z'};
   return {store,deps,context,directory,catalog:new CatalogService(deps),stock:new StockService({...deps,local:true}),async close(){
     await store.close();if(engine==='mysql')await clearMysql('venprox_b05_test');

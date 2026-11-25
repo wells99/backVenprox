@@ -59,13 +59,15 @@ export function loadLocalConfig(env: Environment) {
       if (!value || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value)) throw new ConfigurationError(field);
     }
   }
-  return { ...base, databasePath, identity: storeId && deviceId ? { store_id: storeId, device_id: deviceId } : undefined };
+  if(env.LOCAL_SYNC_ENABLED!==undefined&&!['true','false'].includes(env.LOCAL_SYNC_ENABLED))throw new ConfigurationError('LOCAL_SYNC_ENABLED');
+  if(env.LOCAL_SYNC_ENABLED==='true'&&(!env.AUTH_API_ORIGIN||databasePath===':memory:'))throw new ConfigurationError('AUTH_API_ORIGIN');
+  return { ...base, databasePath,syncEnabled:env.LOCAL_SYNC_ENABLED==='true',syncPollMs:integer(env,'LOCAL_SYNC_POLL_MS',5000,1000,60000), identity: storeId && deviceId ? { store_id: storeId, device_id: deviceId } : undefined };
 }
 
 export function loadWorkerConfig(env: Environment) {
   const mode = required(env, 'WORKER_MODE');
-  if (mode !== 'standby') throw new ConfigurationError('WORKER_MODE');
-  return { ...common(env), mode };
+  if (!['standby','once','run'].includes(mode)) throw new ConfigurationError('WORKER_MODE');
+  return { ...common(env), mode,leaseMs:integer(env,'WORKER_LEASE_MS',10000,3000,60000),timeoutMs:integer(env,'WORKER_JOB_TIMEOUT_MS',30000,1000,120000),pollMs:integer(env,'WORKER_POLL_MS',1000,100,60000),maxJobs:integer(env,'WORKER_MAX_JOBS',20,1,1000) };
 }
 
 export function loadMysqlProbeConfig(env: Environment) {

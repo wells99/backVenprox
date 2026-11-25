@@ -93,7 +93,7 @@ export class StockService extends BusinessBase {
   async rebuild(context:BusinessContext,intention:string,productId:string){
     this.local();this.authorize(context,'recovery.manage');
     const result=await this.transaction((tx)=>this.replay(tx,context,intention,{kind:'stock.rebuild',product_id:productId},async()=>{
-      await this.product(tx,productId,false);const total=BigInt(await tx.business.ledgerSum(productId));
+      await this.product(tx,productId,false);const total=BigInt(await(tx.business.stockProjectionSum?tx.business.stockProjectionSum(productId):tx.business.ledgerSum(productId)));
       if(total>BigInt(Number.MAX_SAFE_INTEGER)||total<BigInt(-Number.MAX_SAFE_INTEGER))throw businessError('QUANTITY_OUT_OF_RANGE');
       const previous=await tx.business.balance(productId),balance={...previous,quantity_milli:Number(total),version:previous.version+1};
       await tx.business.saveBalance(balance);await this.event(tx,context,intention,'stock.projection.rebuilt.v1',{previous,balance});return {...balance,as_of:this.now()};

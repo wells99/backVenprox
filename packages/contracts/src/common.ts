@@ -1,4 +1,5 @@
 import { Type, type Static, type TSchema } from 'typebox';
+export type { TSchema } from 'typebox';
 
 export const RequestIdSchema = Type.String({ minLength: 1, maxLength: 64, pattern: '^[a-zA-Z0-9_-]+$' });
 export const UuidSchema = Type.String({ pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' });

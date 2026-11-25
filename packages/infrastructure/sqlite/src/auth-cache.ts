@@ -9,6 +9,13 @@ export function sqliteAuthCache(store: SqliteStore, protector: { protect(value: 
     return db.prepare('SELECT * FROM auth_local_grants WHERE store_id=? AND device_id=? AND login_key=?').get(identity.store_id, identity.device_id!, login) as { ciphertext: string; failures: number; locked_until: string | null; last_seen: string } | undefined;
   });
   return {
+    proof:async(id)=>{
+      const row=await uow.run(async({db})=>db.prepare('SELECT ciphertext FROM sync_origin_proofs WHERE authorization_id=?').get(id) as {ciphertext:string}|undefined);if(row)return protector.unprotect(row.ciphertext);
+      const legacy=await uow.run(async({db})=>db.prepare('SELECT ciphertext FROM auth_local_grants WHERE store_id=? AND device_id=?').all(identity.store_id,identity.device_id!) as {ciphertext:string}[]);
+      for(const saved of legacy){const grant=JSON.parse(await protector.unprotect(saved.ciphertext)) as LocalGrant;let context:{authorization_id?:string;store_id?:string;device_id?:string};try{context=JSON.parse(Buffer.from(grant.authorization.split('.')[0]!,'base64url').toString('utf8')) as typeof context;}catch{continue;}
+        if(context.authorization_id===id&&context.store_id===identity.store_id&&context.device_id===identity.device_id){const encrypted=await protector.protect(grant.authorization);await uow.run(async({db})=>{db.prepare('INSERT INTO sync_origin_proofs VALUES(?,?) ON CONFLICT DO NOTHING').run(id,encrypted);});return grant.authorization;}}
+      return undefined;
+    },
     device: async () => {
       const encrypted = await uow.run(async ({ db }) => (db.prepare('SELECT ciphertext FROM auth_local_device WHERE singleton=1 AND store_id=? AND device_id=?').get(identity.store_id,identity.device_id!) as {ciphertext:string}|undefined)?.ciphertext);
       return encrypted ? JSON.parse(await protector.unprotect(encrypted)) as PairedDevice : undefined;
@@ -21,8 +28,17 @@ export function sqliteAuthCache(store: SqliteStore, protector: { protect(value: 
     grant: async (login) => { const row = await loadGrant(login); return row ? JSON.parse(await protector.unprotect(row.ciphertext)) as LocalGrant : undefined; },
     saveGrant: async (value, at) => {
       const encrypted = await protector.protect(JSON.stringify(value));
+      const proof=await protector.protect(value.authorization);
+      const previous=await uow.run(async({db})=>db.prepare('SELECT ciphertext FROM auth_local_grants WHERE store_id=? AND device_id=? AND user_id=?').get(identity.store_id,identity.device_id!,value.user_id) as {ciphertext:string}|undefined);
+      let oldProof:{id:string;ciphertext:string}|undefined;
+      if(previous){const grant=JSON.parse(await protector.unprotect(previous.ciphertext)) as LocalGrant;let c:{authorization_id?:string;store_id?:string;device_id?:string}|undefined;try{c=JSON.parse(Buffer.from(grant.authorization.split('.')[0]!,'base64url').toString('utf8')) as typeof c;}catch{ /* An invalid cached grant is never made into evidence. */ }
+        if(c?.authorization_id&&c.store_id===identity.store_id&&c.device_id===identity.device_id)oldProof={id:c.authorization_id,ciphertext:await protector.protect(grant.authorization)};}
       await uow.run(async ({ db }) => { db.prepare(`INSERT INTO auth_local_grants VALUES(?,?,?,?,?,0,NULL,?) ON CONFLICT(store_id,user_id) DO UPDATE SET login_key=excluded.login_key,ciphertext=excluded.ciphertext,failures=0,locked_until=NULL,last_seen=excluded.last_seen`)
-        .run(value.user_id,identity.store_id,identity.device_id!,value.login_key,encrypted,at); });
+        .run(value.user_id,identity.store_id,identity.device_id!,value.login_key,encrypted,at);
+        if(oldProof)db.prepare('INSERT INTO sync_origin_proofs VALUES(?,?) ON CONFLICT DO NOTHING').run(oldProof.id,oldProof.ciphertext);
+        const context=JSON.parse(Buffer.from(value.authorization.split('.')[0]!,'base64url').toString('utf8')) as {authorization_id?:string;store_id?:string;device_id?:string};
+        if(context.store_id===identity.store_id&&context.device_id===identity.device_id&&context.authorization_id)db.prepare('INSERT INTO sync_origin_proofs VALUES(?,?) ON CONFLICT DO NOTHING').run(context.authorization_id,proof);
+      });
     },
     reserveAttempt: async (login, at) => {
       const allowed = await uow.run(async ({ db }) => {

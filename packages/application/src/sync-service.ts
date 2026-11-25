@@ -28,11 +28,12 @@ export class SyncService {
     if(type==='customers.proposal.v1'){const p=payload as {base_version:number;proposal:{confirmation_state?:string}};if(p.base_version===0&&p.proposal.confirmation_state==='local_pending')return 'sales.create';}
     if(type==='cash.opened')return 'cash.open';if(type==='cash.closed')return 'cash.close';if(type==='cash.movement_recorded')return 'cash.adjust';if(type==='sale.completed'||type==='customer.created.v1')return 'sales.create';if(type==='sale.reversed')return 'sales.reverse';if(type==='stock.projection.rebuilt.v1')return 'recovery.manage';if(type.startsWith('stock.'))return 'stock.adjust';if(type.startsWith('settings.')||type==='terminal.settings.updated.v1')return 'settings.manage';if(/^(products|categories|customers)\.proposal/.test(type))return 'catalog.write';return undefined;
   }
-  private async origin(tx:SyncTransaction,e:SyncEnvelope){
+  async validateOrigin(tx:SyncTransaction,e:SyncEnvelope){
     const c=e.origin_authorization.context,time=Date.parse(e.occurred_at_device),start=Date.parse(c.authorized_at),end=Date.parse(c.expires_at),permission=this.permission(e.type,e.payload);
     if(c.store_id!==e.store_id||c.device_id!==e.device_id||!Number.isFinite(time)||!Number.isFinite(start)||!Number.isFinite(end)||time<start||time>=end||time>this.deps.clock.now().getTime()+300000||!permission||!c.permissions.includes(permission))throw new SyncRejection('quarantined','ORIGIN_AUTHORIZATION_INVALID');
     const evidence=await tx.sync.originEvidence(c);
     if(c.authorization_origin==='offline'){
+      if(!e.origin_authorization.signature)throw new SyncRejection('quarantined','ORIGIN_AUTHORIZATION_UNPROVEN');
       let signed;try{signed=this.deps.verifyOriginSignature(e.origin_authorization.signature??'');}catch{throw new SyncRejection('quarantined','ORIGIN_SIGNATURE_INVALID');}
       const grant=evidence.grant;if(this.deps.hashValue(signed)!==this.deps.hashValue(c)||!grant||grant.user_id!==c.user_id||grant.device_id!==e.device_id||grant.permissions_version!==c.permissions_version||grant.issued_at!==c.authorized_at||grant.expires_at!==c.expires_at||grant.revoked_at!==null&&Date.parse(grant.revoked_at)<=time)throw new SyncRejection('quarantined','ORIGIN_AUTHORIZATION_UNPROVEN');return;
     }
@@ -54,7 +55,7 @@ export class SyncService {
       if(e.protocol_version!==1||e.payload_version!==1)throw new SyncRejection('quarantined','UNSUPPORTED_PROTOCOL_OR_PAYLOAD');
       if(BigInt(e.device_seq)!==BigInt(await tx.sync.frontier(e.device_id))+1n)throw new SyncRejection('blocked','SEQUENCE_GAP');
       if(!this.deps.validatePayload(e.type,e.payload_version,e.payload))throw new SyncRejection('quarantined','UNSUPPORTED_OR_INVALID_PAYLOAD');
-      await this.origin(tx,e);
+      await this.validateOrigin(tx,e);
       for(const id of e.dependencies){const dependency=await tx.sync.inbox(id);if(!dependency||dependency.state!=='applied')throw new SyncRejection('blocked','DEPENDENCY_MISSING');}
       const result=await new SyncHandlers(this.deps).apply(tx,e,device.code);
       await tx.audit.append({operation_id:e.operation_id,store_id:e.store_id,device_id:e.device_id,occurred_at:e.occurred_at_device,action:e.type,actor_user_id:e.origin_authorization.context.user_id,permissions_version:e.origin_authorization.context.permissions_version,authorization_id:e.origin_authorization.context.authorization_id,authorization_origin:e.origin_authorization.context.authorization_origin});

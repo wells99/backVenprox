@@ -1,4 +1,8 @@
 import type { Migration } from '../../packages/infrastructure/persistence/src/shared.js';
+import { sqlitePublicationMigration } from './011-publication-protocol.js';
+import { sqliteLocalSyncMigration } from './012-local-sync.js';
+import { sqliteJobsMigration } from './013-job-protocol.js';
+import { sqliteSyncCoordinatorMigration } from './014-sync-coordinator.js';
 import { sqliteAuthMigration } from './003-auth.js';
 import { sqliteAuthorizationMigration } from './004-authorization-provenance.js';
 import { sqliteCatalogMigration } from './005-catalog.js';
@@ -33,4 +37,8 @@ export const sqliteMigrations: readonly Migration[] = [
   sqliteSalesMigration,
   sqliteReversalMigration,
   sqliteSyncMigration,
+  sqlitePublicationMigration,
+  sqliteLocalSyncMigration,
+  sqliteJobsMigration,
+  sqliteSyncCoordinatorMigration,
 ];

@@ -1,0 +1,11 @@
+import { Type } from 'typebox';
+import { UuidSchema as uuid,UtcInstantSchema,ErrorSchema,successSchema } from './common.js';
+const closed={additionalProperties:false};
+export const JobKeyHeaders=Type.Object({'idempotency-key':uuid},{additionalProperties:true});
+export const JobParams=Type.Object({id:uuid},closed),JobRequest=Type.Object({},closed);
+export const RetryJobBody=Type.Object({expected_version:Type.Integer({minimum:1,maximum:2147483647}),reason:Type.String({minLength:1,maxLength:500})},{...closed,example:{expected_version:3,reason:'Falha de infraestrutura corrigida'}});
+export const JobView=Type.Object({id:uuid,type:Type.Literal('catalog.export.v1'),payload_version:Type.Literal(1),status:Type.Union([Type.Literal('queued'),Type.Literal('running'),Type.Literal('retry_wait'),Type.Literal('succeeded'),Type.Literal('failed_review')]),created_at:UtcInstantSchema,attempts:Type.Integer({minimum:0,maximum:5}),version:Type.Integer({minimum:1}),last_code:Type.Union([Type.String(),Type.Null()]),result_available:Type.Boolean()},{...closed,example:{id:'550e8400-e29b-41d4-a716-446655440000',type:'catalog.export.v1',payload_version:1,status:'queued',created_at:'2026-11-25T12:00:00.000Z',attempts:0,version:1,last_code:null,result_available:false}});
+export const JobResponse=successSchema(JobView);
+export const JobExportResponse=successSchema(Type.Object({schema_version:Type.Literal(1),items:Type.Array(Type.Record(Type.String(),Type.Unknown()),{maxItems:1000}),checksum:Type.String({pattern:'^[0-9a-f]{64}$'}),created_at:UtcInstantSchema},{...closed,example:{schema_version:1,items:[],checksum:'0'.repeat(64),created_at:'2026-11-25T12:00:00.000Z'}}));
+export const JobErrors={400:ErrorSchema,401:ErrorSchema,403:ErrorSchema,404:ErrorSchema,409:ErrorSchema,413:ErrorSchema,422:ErrorSchema,429:ErrorSchema,500:ErrorSchema,503:ErrorSchema};
+Object.assign(JobRequest,{example:{}});

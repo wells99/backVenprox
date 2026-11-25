@@ -1,0 +1,11 @@
+import { MysqlStore } from '../packages/infrastructure/mysql/src/store.js';
+import { mysqlJobUnitOfWork } from '../packages/infrastructure/mysql/src/jobs.js';
+import { mysqlCatalogExport } from '../packages/infrastructure/mysql/src/catalog-export.js';
+import { loadAuthDatabaseOptions } from '../packages/infrastructure/runtime/src/auth-config.js';
+import { JobWorker } from '../packages/application/src/job-worker.js';
+import { businessHash } from '../packages/infrastructure/persistence/src/business-repository.js';
+import { systemClock,uuidGenerator } from '../packages/infrastructure/runtime/src/system.js';
+if(process.env.MYSQL_HOST!=='127.0.0.1'||process.env.MYSQL_PORT!=='3308'||process.env.MYSQL_DATABASE!=='venprox_b13_test'||!process.connected)throw new Error('ISOLATED_CRASH_PROBE_ONLY');
+const store=await MysqlStore.connect(loadAuthDatabaseOptions(process.env),{store_id:process.env.STORE_ID!},2),worker=new JobWorker({unitOfWork:mysqlJobUnitOfWork(store),storeId:store.identity.store_id,clock:systemClock,ids:uuidGenerator,hash:businessHash},mysqlCatalogExport(store),uuidGenerator.generate());
+await store.assertReady();process.send?.({type:'ready'});
+process.on('message',async()=>{const job=await worker.claim();if(!job){process.send?.({type:'empty'});return;}await worker.execute(job,new AbortController().signal);process.send?.({type:'effect_committed',id:job.id,token:job.lease_token,owner:job.lease_owner});await new Promise<never>(()=>{});});

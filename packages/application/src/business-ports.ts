@@ -5,6 +5,7 @@ import type { Clock, IdGenerator, UnitOfWork } from './ports.js';
 import type { CashRepository } from './cash-ports.js';
 import type { SalesRepository } from './sales-ports.js';
 import type { ReversalRepository } from './reversal-ports.js';
+import type { PublicationRepository } from './publication-ports.js';
 
 export interface Category {id:string;store_id:string;name:string;search_key:string;active:boolean;version:number}
 export interface Product {id:string;store_id:string;name:string;search_key:string;internal_code:string;code_key:string;unit:Unit;price_cents:number;cost_cents:number|null;category_id:string|null;active:boolean;version:number;barcodes:string[]}
@@ -32,8 +33,9 @@ export interface BusinessRepository extends CashRepository, SalesRepository, Rev
   balance(productId:string):Promise<StockBalance>;saveBalance(value:StockBalance):Promise<void>;
   movements(query:MovementQuery):Promise<StockMovement[]>;movementByOrigin(originId:string,kind:StockMovement['kind'],itemId:string):Promise<StockMovement|undefined>;
   appendMovement(value:StockMovement):Promise<void>;ledgerSum(productId:string):Promise<string>;
+  stockProjectionSum?(productId:string):Promise<string>;
 }
-export interface BusinessTransaction extends PersistenceRepositories { business:BusinessRepository }
+export interface BusinessTransaction extends PersistenceRepositories { business:BusinessRepository;publication?:Pick<PublicationRepository,'publish'> }
 export interface BusinessDependencies {unitOfWork:UnitOfWork<BusinessTransaction>;storeId:string;deviceId:string;local:boolean;clock:Clock;ids:IdGenerator;hash:(value:unknown)=>string;remoteWritesEnabled:boolean}
 export type ProductInput={name:string;internal_code:string;unit:Unit;price_cents:number;cost_cents?:number|null;category_id?:string|null;barcodes?:string[];active?:boolean};
 export type ProductPatch=Partial<ProductInput>;

@@ -25,13 +25,21 @@ try {
   for(const path of ['/api/v1/products','/api/v1/categories','/api/v1/customers','/api/v1/settings','/api/v1/stock/balances','/api/v1/stock/movements','/api/v1/cash-sessions']){
     assert.ok(Object.keys(spec.paths).includes(path));assert.equal((await fetch(`http://127.0.0.1:${port}${path}`)).status,401);
   }
-  for(const path of ['/api/v1/sync/push','/api/v1/sync/device-state','/api/v1/sync/receipts/{operation_id}'])assert.ok(Object.keys(spec.paths).includes(path));
+  for(const path of ['/api/v1/sync/push','/api/v1/sync/device-state','/api/v1/sync/receipts/{operation_id}','/api/v1/sync/changes','/api/v1/sync/snapshots','/api/v1/sync/snapshots/{id}','/api/v1/sync/snapshots/{id}/pages/{page}'])assert.ok(Object.keys(spec.paths).includes(path));
+  assert.equal(Object.keys(spec.paths).includes('/api/v1/sync/snapshot'),false);
+  for(const path of ['/api/v1/exports/catalog','/api/v1/jobs/{id}','/api/v1/jobs/{id}/result','/api/v1/admin/jobs/{id}/retry'])assert.ok(Object.keys(spec.paths).includes(path));
+  for(const path of ['/api/v1/admin/sync-resolutions','/api/v1/admin/sync-resolutions/{id}'])assert.ok(Object.keys(spec.paths).includes(path));
+  assert.equal((await fetch(`http://127.0.0.1:${port}/api/v1/admin/sync-resolutions/550e8400-e29b-41d4-a716-446655440000`)).status,401);
+  assert.equal((await fetch(`http://127.0.0.1:${port}/api/v1/jobs/550e8400-e29b-41d4-a716-446655440000`)).status,401);
+  assert.equal((await fetch(`http://127.0.0.1:${port}/api/v1/sync/changes`,{headers:{'x-device-credential':'x'.repeat(43)}})).status,401);
   assert.equal((await fetch(`http://127.0.0.1:${port}/api/v1/sync/device-state`,{headers:{'x-device-credential':'x'.repeat(43)}})).status,401);
   const unauthenticated=once(local,'message',{signal:AbortSignal.timeout(10000)}); local.send({type:'auth.getContext',request_id:'auth-smoke'});
   assert.equal((await unauthenticated)[0].error.code,'AUTHENTICATION_REQUIRED');
   const business=once(local,'message',{signal:AbortSignal.timeout(10000)});local.send({type:'settings.get',request_id:'business-smoke'});
   assert.equal((await business)[0].error.code,'AUTHENTICATION_REQUIRED');
   for(const command of [{type:'cash.getCurrent'},{type:'sales.getCompletionResult',intention_id:'550e8400-e29b-41d4-a716-446655440000'}]){const result=once(local,'message',{signal:AbortSignal.timeout(10000)});local.send({...command,request_id:'financial-smoke'});assert.equal((await result)[0].error.code,'AUTHENTICATION_REQUIRED');}
+  for(const type of ['sync.getStatus','sync.requestRetry','sync.listConflicts']){const result=once(local,'message',{signal:AbortSignal.timeout(10000)});local.send({type,request_id:'sync-smoke'});assert.equal((await result)[0].error.code,'AUTHENTICATION_REQUIRED');}
+  const review=once(local,'message',{signal:AbortSignal.timeout(10000)});local.send({type:'sync.submitResolution',request_id:'resolution-smoke',intention_id:'550e8400-e29b-41d4-a716-446655440000',operation_id:'550e8400-e29b-41d4-a716-446655440000',expected_version:1,action:'confirm_original',reason:'Conferência de contrato sem sessão'});assert.equal((await review)[0].error.code,'AUTHENTICATION_REQUIRED');
   const status=once(local,'message',{signal:AbortSignal.timeout(10000)}); local.send({type:'device.getStatus',request_id:'device-smoke'});
   assert.equal((await status)[0].data.offline_enabled,false);
   api.disconnect(); local.send({type:'shutdown',request_id:'stop-smoke'});

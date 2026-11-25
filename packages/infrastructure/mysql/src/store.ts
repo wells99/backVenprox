@@ -11,11 +11,14 @@ import { assertIdentity, assertUuid, checksum, maxSequence, translatePersistence
 
 type History = RowDataPacket & { version: number; checksum: string; state: string; step: number };
 export class MysqlStore {
+  // Per-process diagnostics only; never an accounting/idempotency source.
+  readonly metrics={commits:0,transaction_failures:0,deadlock_retries:0};
   private constructor(private readonly pool: Pool, readonly identity: DatabaseIdentity, readonly version: string) {}
-  static async connect(options: ConnectionOptions, identity: DatabaseIdentity) {
+  static async connect(options: ConnectionOptions, identity: DatabaseIdentity, connectionLimit=4) {
+    if(!Number.isSafeInteger(connectionLimit)||connectionLimit<1||connectionLimit>4)throw new PersistenceError('INVALID_PERSISTED_VALUE');
     assertUuid(identity.store_id);
     if (identity.device_id) throw new PersistenceError('IDENTITY_MISMATCH');
-    const pool = createPool({ ...options, connectionLimit: 4, waitForConnections: true, queueLimit: 20, connectTimeout: 5000,
+    const pool = createPool({ ...options, connectionLimit, waitForConnections: true, queueLimit: 20, connectTimeout: 5000,
       supportBigNumbers: true, bigNumberStrings: true, multipleStatements: false, charset: 'utf8mb4_bin', dateStrings: true, jsonStrings: true });
     try {
       const [rows] = await pool.query<RowDataPacket[]>('SELECT VERSION() AS version');
@@ -132,12 +135,14 @@ export class MysqlStore {
           // O range lock compartilhado impede publicar nova migration no meio da transação.
           await this.assertReady(connection, true);
           const result = await work(extend ? extend(connection, core, guard) : core as T);
-          await connection.commit(); return result;
+          await connection.commit();this.metrics.commits++;return result;
         } catch (error) {
+          this.metrics.transaction_failures++;
           await connection.rollback().catch(() => {});
           if (error instanceof ApplicationError) throw error;
           const failure = translatePersistenceError(error);
           if (failure.code !== 'DEADLOCK' || attempt >= 2) throw failure;
+          this.metrics.deadlock_retries++;
         } finally { active = false; connection.release(); }
       }
     } };

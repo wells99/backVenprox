@@ -1,4 +1,8 @@
 import type { Migration } from '../../packages/infrastructure/persistence/src/shared.js';
+import { mysqlPublicationMigration } from './011-publication.js';
+import { mysqlLocalSyncMigration } from './012-local-sync-protocol.js';
+import { mysqlJobsMigration } from './013-jobs.js';
+import { mysqlSyncResolutionsMigration } from './014-sync-resolutions.js';
 import { mysqlAuthMigration } from './003-auth.js';
 import { mysqlAuthorizationMigration } from './004-authorization-provenance.js';
 import { mysqlCatalogMigration } from './005-catalog.js';
@@ -35,4 +39,8 @@ export const mysqlMigrations: readonly Migration[] = [
   mysqlSalesMigration,
   mysqlReversalMigration,
   mysqlSyncMigration,
+  mysqlPublicationMigration,
+  mysqlLocalSyncMigration,
+  mysqlJobsMigration,
+  mysqlSyncResolutionsMigration,
 ];

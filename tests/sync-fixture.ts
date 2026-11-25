@@ -20,8 +20,9 @@ import type { Product } from '../packages/application/src/business-ports.js';
 import { createAuthCrypto, generateAuthKeys } from '../packages/infrastructure/security/src/crypto.js';
 import { laboratoryPublication, syncEnvelopeHash, syncHashValue, validateSyncPayload } from '../packages/infrastructure/security/src/sync-validation.js';
 
-export async function syncFixture(){
-  const f=await financialFixture('mysql','b10');if(!(f.store instanceof MysqlStore))throw new Error('MYSQL_REQUIRED');
+export async function syncFixture(stage:'b10'|'b11'|'b12'|'b13'|'b13_load'|'b12_final'='b10'){
+  const f=await financialFixture('mysql',stage);if(!(f.store instanceof MysqlStore))throw new Error('MYSQL_REQUIRED');
+  const store=f.store;
   const keys=generateAuthKeys(),crypto=createAuthCrypto(keys.privateKey,keys.fingerprintKey),token=crypto.token(),auth=new AuthService({unitOfWork:authUnitOfWork(f.store),storeId:f.identity.store_id,clock:f.deps.clock,ids:f.deps.ids,crypto});
   await provisionAuth(f.options,f.identity.store_id,crypto.digest(token),'2026-11-25T13:00:00.000Z',0);await auth.activate({installation_token:token,store_name:'Laboratório sync',login:'owner',name:'Dono',password:'Sync-test-only-password-123!'},'test');const login=await auth.login('owner','Sync-test-only-password-123!','test');
   let devices=0;const newDevice=async(id:string=randomUUID())=>{const invite=await auth.invitation(login.access);const enrolled=await auth.enroll(invite.invitation_token,id,`enrollment-${++devices}`);return {id:enrolled.device_id,credential:enrolled.device_credential,code:enrolled.code};};
@@ -46,5 +47,5 @@ export async function syncFixture(){
   const rows=local.database.prepare('SELECT * FROM operation_outbox ORDER BY device_seq').all() as {operation_id:string;device_seq:number;event_type:string;occurred_at:string;payload:string;authorization_context:string}[];
   const events:SyncEnvelope[]=rows.map((row)=>{const payload=JSON.parse(row.payload) as unknown,event:SyncEnvelope={protocol_version:1,payload_version:1,store_id:f.identity.store_id,device_id:device.id,operation_id:row.operation_id,device_seq:String(row.device_seq),type:row.event_type,occurred_at_device:row.occurred_at,origin_authorization:{context:JSON.parse(row.authorization_context),signature:null},dependencies:[],payload,payload_hash:'0'.repeat(64)};event.payload_hash=syncEnvelopeHash(event);return event;});
   const clone=(event:SyncEnvelope,patch:Partial<SyncEnvelope>={})=>{const next={...structuredClone(event),...patch};next.payload_hash=syncEnvelopeHash(next);return next;};
-  return {...f,businessDeps:f.deps,local,localDeps,auth,login,crypto,device,context,product,saleId,sessionId:session.id,nextSessionId:next.id,events,deps,sync:new SyncService(deps),newDevice,clone,now:financialNow,async close(){await local.close();await f.close();}};
+  return {...f,store,businessDeps:f.deps,local,localDeps,auth,login,crypto,device,context,product,saleId,sessionId:session.id,nextSessionId:next.id,events,deps,sync:new SyncService(deps),newDevice,clone,now:financialNow,async close(){await local.close();await f.close();}};
 }

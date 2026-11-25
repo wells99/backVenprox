@@ -14,6 +14,10 @@ export const LocalDiagnosticsSchema = Type.Object({
 export const LocalErrorSchema = Type.Object({ type: Type.Literal('error'), error: ErrorSchema.properties.error }, { additionalProperties: false });
 export type LocalDiagnostics = Static<typeof LocalDiagnosticsSchema>;
 export const ipcCatalog = {
+  'sync.submitResolution':{dto:'localSyncCommands',permission:'online + recovery.manage + users.manage (+catalog.write)',use_case:'LocalSyncResolutionService.submit',response:'LocalSyncResponse'},
+  'sync.getStatus':{dto:'localSyncCommands',permission:'catalog.read',use_case:'LocalSyncService.getStatus',response:'LocalSyncResponse'},
+  'sync.requestRetry':{dto:'localSyncCommands',permission:'catalog.read',use_case:'LocalSyncService.requestRetry',response:'LocalSyncResponse'},
+  'sync.listConflicts':{dto:'localSyncCommands',permission:'catalog.read',use_case:'LocalSyncService.listConflicts',response:'LocalSyncResponse'},
   'sales.reverse':{dto:'businessIpcCommands',permission:'sales.reverse',use_case:'ReversalService.reverse',response:'BusinessIpcResponse'},
   'cash.previewClose':{dto:'businessIpcCommands',permission:'cash.close',use_case:'ClosureService.preview',response:'BusinessIpcResponse'},
   'cash.close':{dto:'businessIpcCommands',permission:'cash.close',use_case:'ClosureService.close',response:'BusinessIpcResponse'},

@@ -22,6 +22,7 @@ import { createCompatibilityPolicy } from '../packages/domain/src/compatibility.
 import { businessDate } from '../packages/domain/src/cash.js';
 import { BusinessIpcResponse } from '../packages/contracts/src/catalog-stock.js';
 import { SaleCompletedEvent } from '../packages/contracts/src/sales.js';
+import { LocalSyncResponse } from '../packages/contracts/src/local-sync.js';
 
 test('B07/B08 processo Windows real: login online, venda sem servidor, reinício e recuperação sem habilitar offline',{skip:!process.env.MYSQL_PASSWORD,timeout:120000},async()=>{
   const f=await financialFixture('mysql','b08_ipc');assert.ok(f.store instanceof MysqlStore);
@@ -46,13 +47,16 @@ test('B07/B08 processo Windows real: login online, venda sem servidor, reinício
     await app.listen({host:'127.0.0.1',port});await start();
     assert.equal((await send({type:'device.enroll',invitation_token:invite.invitation_token})).data.paired,true);
     const auth=await send({type:'auth.loginOnline',login:'owner',password});assert.equal(auth.type,'auth.result');assert.ok(auth.data.context.permissions.includes('sales.discount'));
+    const syncStatus=await send({type:'sync.getStatus'});assert.ok(Value.Check(LocalSyncResponse,syncStatus));assert.ok('pending'in syncStatus.data);assert.equal(syncStatus.data.pending,0);assert.equal(syncStatus.data.automatic_sync_enabled,false);
     assert.equal((await send({type:'device.getStatus'})).data.offline_enabled,false);
     await app.close(); // Sem servidor de identidade/sync durante as escritas locais.
     const opened=await send({type:'cash.open',intention_id:randomUUID(),input:{opening_cents:0,business_date:businessDate(new Date().toISOString(),'America/Sao_Paulo'),time_zone:'America/Sao_Paulo'}});assert.equal(opened.type,'business.result');
     const saleId=randomUUID(),intent=randomUUID(),draftInput={items:[{id:randomUUID(),product_id:product.id,expected_product_version:1,quantity_milli:1000},{id:randomUUID(),product_id:null,description:'Avulso IPC',price_cents:100,quantity_milli:1000}],customer_id:null,note:null,discount_cents:1};
     assert.equal((await send({type:'sales.createDraft',sale_id:saleId,intention_id:randomUUID(),input:draftInput})).data.draft.totals.total_cents,199);
     const input={sale_id:saleId,session_id:opened.data.session.id,expected_draft_version:1,expected_settings_version:1,payments:[{id:randomUUID(),method:'cash',applied_cents:99,tendered_cents:200,change_cents:101},{id:randomUUID(),method:'pix',applied_cents:100,tendered_cents:100,change_cents:0}]};
-    const completed=await send({type:'sales.complete',intention_id:intent,input});assert.equal(completed.type,'business.result');assert.equal(completed.data.completion.sync_status,'pending');assert.equal(completed.data.completion.sale.total_cents,199);await stop();
+    const completed=await send({type:'sales.complete',intention_id:intent,input});assert.equal(completed.type,'business.result');assert.equal(completed.data.completion.sync_status,'pending');assert.equal(completed.data.completion.sale.total_cents,199);
+    const pendingStatus=await send({type:'sync.getStatus'});assert.ok(Value.Check(LocalSyncResponse,pendingStatus));assert.ok('pending'in pendingStatus.data);assert.equal(pendingStatus.data.pending,2);
+    const retryRequested=await send({type:'sync.requestRetry'});assert.ok(Value.Check(LocalSyncResponse,retryRequested));assert.ok('scheduled'in retryRequested.data);assert.equal(retryRequested.data.scheduled,true);assert.equal(retryRequested.data.automatic_sync_enabled,false);await stop();
     const persisted=SqliteStore.open(path,f.identity);try{
       for(const [table,count] of [['sales',1],['sale_items',2],['sale_payments',2],['stock_movements',1],['cash_movements',3],['operation_outbox',2]])assert.equal((persisted.database.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as {n:number}).n,count);
       const event=persisted.database.prepare("SELECT payload FROM operation_outbox WHERE event_type='sale.completed'").get() as {payload:string};assert.ok(Value.Check(SaleCompletedEvent,JSON.parse(event.payload)));

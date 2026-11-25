@@ -9,7 +9,7 @@ import { assertSupportedRuntime, systemClock } from '../../../packages/infrastru
 import { installShutdown } from '../../../packages/infrastructure/runtime/src/shutdown.js';
 import { openSqliteRuntime } from '../../../packages/infrastructure/sqlite/src/runtime-diagnostics.js';
 import { openLocalPersistence, SqliteStore } from '../../../packages/infrastructure/sqlite/src/store.js';
-import { LocalAuthService } from '../../../packages/application/src/local-auth.js';
+import { LocalAuthService, type LocalIdentityCache } from '../../../packages/application/src/local-auth.js';
 import { ApplicationError } from '../../../packages/application/src/application-error.js';
 import { PersistenceError } from '../../../packages/application/src/persistence.js';
 import { authIpcCommands, AuthIpcResponse } from '../../../packages/contracts/src/auth.js';
@@ -29,6 +29,18 @@ import { businessHash } from '../../../packages/infrastructure/persistence/src/b
 import { uuidGenerator } from '../../../packages/infrastructure/runtime/src/system.js';
 import { businessIpcCommands, BusinessIpcResponse, businessEnvelope } from '../../../packages/contracts/src/catalog-stock.js';
 import { executeBusiness } from './business.js';
+import { LocalSyncService } from '../../../packages/application/src/local-sync-service.js';
+import { sqliteLocalSyncUnitOfWork } from '../../../packages/infrastructure/sqlite/src/local-sync.js';
+import { localSyncCommands, LocalSyncResponse } from '../../../packages/contracts/src/local-sync.js';
+import { SyncEnvelope, SyncReceipt } from '../../../packages/contracts/src/sync.js';
+import { syncEnvelopeHash } from '../../../packages/infrastructure/security/src/sync-validation.js';
+import { SyncCoordinator } from '../../../packages/application/src/sync-coordinator.js';
+import { LocalSyncResolutionService } from '../../../packages/application/src/local-sync-resolution.js';
+import { sqliteCoordinatorUnitOfWork } from '../../../packages/infrastructure/sqlite/src/sync-replica.js';
+import { syncGateway,syncHttpClient } from '../../../packages/infrastructure/security/src/sync-gateway.js';
+import { ResolutionResponse } from '../../../packages/contracts/src/sync-resolutions.js';
+import type { ResolutionResult } from '../../../packages/application/src/sync-resolution-ports.js';
+import { syncLoop } from '../../../packages/infrastructure/runtime/src/sync-loop.js';
 
 try {
   assertSupportedRuntime();
@@ -38,6 +50,10 @@ try {
     : await openLocalPersistence(config.databasePath, config.identity!);
   const getDiagnostics = createGetLocalDiagnostics(sqlite.repository, systemClock);
   let localAuth: LocalAuthService | undefined;
+  let cache:LocalIdentityCache|undefined;
+  const network=new AbortController();
+  const localSync='store'in sqlite&&sqlite.store instanceof SqliteStore?new LocalSyncService({unitOfWork:sqliteLocalSyncUnitOfWork(sqlite.store),storeId:config.identity!.store_id,deviceId:config.identity!.device_id,clock:systemClock,ids:uuidGenerator,hashEnvelope:syncEnvelopeHash,validateEnvelope:(value)=>Value.Check(SyncEnvelope,value),validateReceipt:(value)=>Value.Check(SyncReceipt,value),random:Math.random}):undefined;
+  await localSync?.initialize();
   const business='store' in sqlite&&sqlite.store instanceof SqliteStore?{unitOfWork:sqliteBusinessUnitOfWork(sqlite.store),
     storeId:config.identity!.store_id,deviceId:config.identity!.device_id,local:true,clock:systemClock,ids:uuidGenerator,hash:businessHash,remoteWritesEnabled:false}:undefined;
   const catalog=business?new CatalogService(business):undefined,stock=business?new StockService(business):undefined;
@@ -46,10 +62,16 @@ try {
   const reversal=business?new ReversalService(business):undefined,closure=business?new ClosureService(business):undefined;
   if ('store' in sqlite && sqlite.store instanceof SqliteStore && process.env.AUTH_API_ORIGIN) {
     const ephemeral = generateAuthKeys();
+    cache=sqliteAuthCache(sqlite.store, windowsSecretProtector(`venprox-auth-v1:${config.identity!.store_id}:${config.identity!.device_id}`));
     localAuth = new LocalAuthService({ storeId: config.identity!.store_id, deviceId: config.identity!.device_id,
-      cache: sqliteAuthCache(sqlite.store, windowsSecretProtector(`venprox-auth-v1:${config.identity!.store_id}:${config.identity!.device_id}`)),
+      cache,
       gateway: identityGateway(process.env.AUTH_API_ORIGIN), crypto: createAuthCrypto(ephemeral.privateKey,ephemeral.fingerprintKey), clock: systemClock });
   }
+  const coordinator=localSync&&cache&&process.env.AUTH_API_ORIGIN&&'store'in sqlite&&sqlite.store instanceof SqliteStore?new SyncCoordinator({...localSync.deps,unitOfWork:sqliteCoordinatorUnitOfWork(sqlite.store),gateway:syncGateway(process.env.AUTH_API_ORIGIN,network.signal),device:()=>cache!.device(),proof:(id)=>cache!.proof!(id)}):undefined;
+  const request=process.env.AUTH_API_ORIGIN?syncHttpClient(process.env.AUTH_API_ORIGIN,network.signal):undefined;
+  const resolutions=coordinator&&request?new LocalSyncResolutionService(coordinator,async(device,id,command)=>(await request('/api/v1/admin/sync-resolutions',device,ResolutionResponse,command,true,{'idempotency-key':id})).data as ResolutionResult):undefined;
+  if(coordinator)await coordinator.deps.unitOfWork.run((tx)=>tx.replica.state(config.syncEnabled?'starting':'disabled',null,systemClock.now().toISOString(),config.syncEnabled));
+  const synchronization=config.syncEnabled&&coordinator?syncLoop(()=>coordinator.cycle(),config.syncPollMs,()=>logger.warn({event:'sync_cycle_unavailable'},'Ciclo de sincronização interrompido; pendências preservadas.')):undefined;
   // Mantém o processo dedicado vivo também na execução manual, sem abrir porta TCP.
   const keepAlive = setInterval(() => {}, 60_000);
   const shutdown = installShutdown({
@@ -58,11 +80,34 @@ try {
     close: async () => {
       clearInterval(keepAlive);
       process.off('message', onMessage);
+      network.abort();
+      await synchronization?.stop();
+      await coordinator?.exclusive(async()=>{});
       await sqlite.close();
       if (process.connected) process.disconnect();
     },
   });
   async function onMessage(message: unknown) {
+    if(withinPayloadLimits(message)&&Value.Check(localSyncCommands,message)){
+      try{
+        if(!localAuth||!localSync)throw new ApplicationError('SYNC_NOT_CONFIGURED','Sincronização local não configurada.','unavailable');
+        const {context}=await localAuth.getContext();
+        let data:unknown;
+        if(message.type==='sync.submitResolution'){
+          if(!resolutions)throw new ApplicationError('SYNC_NOT_CONFIGURED','Sincronização local não configurada.','unavailable');
+          const {type:_type,request_id:_request,intention_id,...command}=message;data=await resolutions.submit(context,intention_id,command);synchronization?.wake();
+        }else data=message.type==='sync.getStatus'?await localSync.getStatus(context):message.type==='sync.requestRetry'?await localSync.requestRetry(context):await localSync.listConflicts(context);
+        if(message.type==='sync.requestRetry')synchronization?.wake();
+        const result={type:'sync.result',data,meta:{request_id:message.request_id}};
+        if(!Value.Check(LocalSyncResponse,result))throw new Error('INVALID_SYNC_IPC_OUTPUT');
+        if(process.connected)process.send?.(result);
+      }catch(error){
+        const response=error instanceof ApplicationError?errorResponse(error.code,error.message,message.request_id,[],error.retryable)
+          :error instanceof PersistenceError?errorResponse(error.code,'Não foi possível ler a fila local; preserve os dados e confira o diagnóstico.',message.request_id,[],error.retryable)
+          :errorResponse('LOCAL_SYNC_UNAVAILABLE','Não foi possível ler a fila local; preserve os dados e confira o diagnóstico.',message.request_id);
+        if(process.connected)process.send?.({type:'error',...response});
+      }return;
+    }
     if(withinPayloadLimits(message)&&Value.Check(businessIpcCommands,message)){
       try{
         if(!localAuth||!catalog||!stock)throw new ApplicationError('BUSINESS_NOT_CONFIGURED','Operação local não configurada.','unavailable');
@@ -92,6 +137,7 @@ try {
         }
         const result = { type: 'auth.result', data, meta: { request_id: message.request_id } };
         if (!Value.Check(AuthIpcResponse,result)) throw new Error('INVALID_IPC_OUTPUT');
+        if(message.type==='device.enroll'||message.type==='auth.loginOnline')synchronization?.wake();
         if (process.connected) process.send?.(result);
       } catch (error) {
         const response = error instanceof ApplicationError ? errorResponse(error.code,error.message,message.request_id,[],error.retryable)

@@ -3,6 +3,7 @@ import { dirname, isAbsolute, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { ApplicationError } from '../../../application/src/application-error.js';
 import Database from 'better-sqlite3';
+import { eventMovementIds } from '../../../domain/src/sync-projection.js';
 import { sqliteMigrations } from '../../../../migrations/sqlite/registry.js';
 import { PersistenceError, type DatabaseIdentity, type PersistenceRepositories } from '../../../application/src/persistence.js';
 import type { RuntimeDiagnosticsRepository, UnitOfWork } from '../../../application/src/ports.js';
@@ -116,6 +117,8 @@ export class SqliteStore {
         sequences: { next: async (deviceId) => {
           guard(); assertUuid(deviceId);
           if (deviceId !== this.identity.device_id) throw new PersistenceError('IDENTITY_MISMATCH');
+          const safety=db.prepare('SELECT state FROM sync_runtime WHERE store_id=? AND device_id=?').get(this.identity.store_id,deviceId) as {state:string}|undefined;
+          if(safety?.state==='recovery_required')throw new ApplicationError('SYNC_RECOVERY_REQUIRED','A identidade exige recuperação antes de gravar novas operações.','conflict');
           db.prepare('INSERT INTO device_sequences VALUES(?,?,0) ON CONFLICT DO NOTHING').run(this.identity.store_id, deviceId);
           const row = db.prepare('SELECT sequence_value FROM device_sequences WHERE store_id=? AND device_id=?').safeIntegers().get(this.identity.store_id, deviceId) as { sequence_value: bigint };
           if (row.sequence_value >= maxSequence) throw new PersistenceError('INVALID_PERSISTED_VALUE');
@@ -127,6 +130,7 @@ export class SqliteStore {
           guard(); validateOperation(operation, this.identity);
           db.prepare('INSERT INTO operation_outbox(operation_id,store_id,device_id,device_seq,occurred_at,event_type,payload,authorization_context) VALUES(?,?,?,?,?,?,?,?)')
             .run(operation.operation_id, operation.store_id, operation.device_id, BigInt(operation.device_seq), operation.occurred_at, operation.event_type, operation.payload,operation.authorization?JSON.stringify(operation.authorization):null);
+          for(const id of eventMovementIds(operation.event_type,JSON.parse(operation.payload)))db.prepare('INSERT INTO sync_local_movements VALUES(?,?,?)').run(id,operation.operation_id,BigInt(operation.device_seq));
         } },
         audit: { append: async (event) => {
           guard(); assertUuid(event.operation_id);

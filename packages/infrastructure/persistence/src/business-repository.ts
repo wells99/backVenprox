@@ -84,7 +84,7 @@ export function businessRepository(sql:BusinessSql,storeId:string):BusinessRepos
     },saveTerminalSettings:(value)=>save('terminal_settings',value,['store_id','device_id']),
     intention:(id)=>one<Intention>('catalog_intentions','AND intention_id=?',[id]),saveIntention:(value)=>save('catalog_intentions',value,['store_id','intention_id']),
     proposal:(id)=>one<Proposal>('catalog_proposals','AND intention_id=?',[id]),saveProposal:(value)=>save('catalog_proposals',value,['store_id','intention_id']),
-    proposals:(kind)=>rows<Proposal>('catalog_proposals',`${kind?'AND entity_type=?':''} ORDER BY intention_id LIMIT 100`,kind?[kind]:[]),
+    proposals:(kind)=>rows<Proposal>('catalog_proposals',`${kind?'AND entity_type=?':''} AND NOT EXISTS(SELECT 1 FROM sync_proposal_outcomes s WHERE s.operation_id=catalog_proposals.intention_id) ORDER BY intention_id LIMIT 100`,kind?[kind]:[]),
     balance:async(productId)=>(await one<StockBalance>('stock_balances','AND product_id=?',[productId]))??{store_id:storeId,product_id:productId,quantity_milli:0,version:0},
     saveBalance:(value)=>save('stock_balances',value,['store_id','product_id']),
     movements:async(query)=>{

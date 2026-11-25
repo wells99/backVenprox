@@ -13,7 +13,7 @@ export class BusinessBase {
     if(context.expires_at<=this.now()||context.authorized_at>this.now())throw new ApplicationError('AUTHENTICATION_REQUIRED','Renove a autenticação.','unauthenticated');
     if(!context.permissions.includes(permission))throw new ApplicationError('PERMISSION_DENIED','Permissão insuficiente.','forbidden');
   }
-  writesAllowed(){if(!this.deps.local&&!this.deps.remoteWritesEnabled)throw new ApplicationError('CATALOG_PUBLICATION_REQUIRED','Escritas de cadastro aguardam publicação de mudanças B11; disponíveis apenas no ambiente isolado.','unavailable');}
+  writesAllowed(){if(!this.deps.local&&!this.deps.remoteWritesEnabled)throw new ApplicationError('CATALOG_PUBLICATION_REQUIRED','Escritas de cadastro exigem publicação transacional habilitada.','unavailable');}
   async transaction<T>(work:(tx:BusinessTransaction)=>Promise<T>):Promise<T>{return this.deps.unitOfWork.run(async(tx)=>{await tx.business.lockScope();return work(tx);});}
   async replay<T>(tx:BusinessTransaction,context:BusinessContext,id:string,command:unknown,work:()=>Promise<T>):Promise<T> {
     const hash=this.deps.hash(command),previous=await tx.business.intention(id);
@@ -21,6 +21,12 @@ export class BusinessBase {
     const result=await work();await tx.business.saveIntention({intention_id:id,store_id:this.deps.storeId,actor_id:context.user_id,command_hash:hash,result_json:JSON.stringify(result)});return result;
   }
   async event(tx:BusinessTransaction,context:BusinessContext,id:string,type:string,payload:unknown,reservedSequence?:string){
+    if(!this.deps.local){
+      if(!tx.publication)throw new ApplicationError('CATALOG_PUBLICATION_REQUIRED','Publicação transacional indisponível.','unavailable');
+      await tx.publication.publish({operation_id:id,type,source:'web',payload,published_at:this.now()});
+      await tx.audit.append({operation_id:id,store_id:this.deps.storeId,device_id:this.deps.deviceId,occurred_at:this.now(),action:type,actor_user_id:context.user_id,permissions_version:context.permissions_version,authorization_id:context.authorization_id,authorization_origin:context.authorization_origin});
+      return;
+    }
     const sequence=reservedSequence??await tx.sequences.next(this.deps.deviceId);
     await tx.outbox.append({operation_id:id,store_id:this.deps.storeId,device_id:this.deps.deviceId,device_seq:sequence,occurred_at:this.now(),event_type:type,payload:JSON.stringify(payload),authorization:context});
     await tx.audit.append({operation_id:id,store_id:this.deps.storeId,device_id:this.deps.deviceId,occurred_at:this.now(),action:type,

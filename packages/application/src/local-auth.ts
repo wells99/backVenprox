@@ -10,6 +10,7 @@ export interface LocalIdentityCache {
   grant(login: string): Promise<LocalGrant | undefined>; saveGrant(value: LocalGrant, at: string): Promise<void>;
   reserveAttempt(login: string, at: string): Promise<void>; seen(login: string, at: string): Promise<void>;
   lastSeen(login: string): Promise<string | undefined>;
+  proof?(authorizationId:string):Promise<string|undefined>;
 }
 export interface RemoteIdentityGateway {
   enroll(token: string, deviceId: string): Promise<PairedDevice>;

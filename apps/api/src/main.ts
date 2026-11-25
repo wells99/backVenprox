@@ -16,11 +16,13 @@ import { StockService } from '../../../packages/application/src/stock-service.js
 import { CashService } from '../../../packages/application/src/cash-service.js';
 import { mysqlBusinessUnitOfWork } from '../../../packages/infrastructure/mysql/src/business.js';
 import { businessHash } from '../../../packages/infrastructure/persistence/src/business-repository.js';
-import { catalogLabWrites } from '../../../packages/infrastructure/runtime/src/catalog-config.js';
 import { SyncService } from '../../../packages/application/src/sync-service.js';
-import { mysqlSyncUnitOfWork } from '../../../packages/infrastructure/mysql/src/sync.js';
-import { syncLabWrites } from '../../../packages/infrastructure/runtime/src/sync-config.js';
-import { laboratoryPublication, syncEnvelopeHash, syncHashValue, validateSyncPayload } from '../../../packages/infrastructure/security/src/sync-validation.js';
+import { atomicSyncPublication, mysqlSyncUnitOfWork } from '../../../packages/infrastructure/mysql/src/sync.js';
+import { syncEnvelopeHash, syncHashValue, validateSyncPayload } from '../../../packages/infrastructure/security/src/sync-validation.js';
+import { DownloadService } from '../../../packages/application/src/download-service.js';
+import { JobService } from '../../../packages/application/src/job-service.js';
+import { mysqlJobUnitOfWork } from '../../../packages/infrastructure/mysql/src/jobs.js';
+import { SyncResolutionService } from '../../../packages/application/src/sync-resolution-service.js';
 
 try {
   assertSupportedRuntime();
@@ -31,7 +33,7 @@ try {
   if(process.env.AUTH_ENABLED!==undefined && !['true','false'].includes(process.env.AUTH_ENABLED))throw new ConfigurationError('AUTH_ENABLED');
   if (process.env.AUTH_ENABLED === 'true') {
     const settings = loadAuthConfig(process.env);
-    const remoteWritesEnabled=catalogLabWrites(process.env);
+    const remoteWritesEnabled=true;
     authStore = await MysqlStore.connect(settings.mysql, { store_id: settings.storeId });
     try { await authStore.assertReady(); await authUnitOfWork(authStore).run(async () => {}); }
     catch (error) { await authStore.close(); throw error; }
@@ -42,7 +44,11 @@ try {
       clock:systemClock,ids:uuidGenerator,hash:businessHash,remoteWritesEnabled};
     auth.business={catalog:new CatalogService(business),stock:new StockService(business),cash:new CashService(business)};
     const syncCrypto=createAuthCrypto(settings.privateKey,settings.fingerprintKey);
-    auth.sync=new SyncService({unitOfWork:mysqlSyncUnitOfWork(authStore),storeId:settings.storeId,clock:systemClock,ids:uuidGenerator,digest:syncCrypto.digest,hashEnvelope:syncEnvelopeHash,hashValue:syncHashValue,validatePayload:validateSyncPayload,verifyOriginSignature:(signature)=>syncCrypto.verifyGrant(signature,syncCrypto.publicKey()),publication:laboratoryPublication,writesEnabled:syncLabWrites(process.env)});
+    const syncService=new SyncService({unitOfWork:mysqlSyncUnitOfWork(authStore),storeId:settings.storeId,clock:systemClock,ids:uuidGenerator,digest:syncCrypto.digest,hashEnvelope:syncEnvelopeHash,hashValue:syncHashValue,validatePayload:validateSyncPayload,verifyOriginSignature:(signature)=>syncCrypto.verifyGrant(signature,syncCrypto.publicKey()),publication:atomicSyncPublication,writesEnabled:true});
+    auth.sync=syncService;
+    auth.resolutions=new SyncResolutionService({...syncService.deps,unitOfWork:mysqlSyncUnitOfWork(authStore)});
+    auth.download=new DownloadService({unitOfWork:mysqlSyncUnitOfWork(authStore),storeId:settings.storeId,clock:systemClock,ids:uuidGenerator,digest:syncCrypto.digest,hash:syncHashValue,bytes:(value)=>Buffer.byteLength(JSON.stringify(value))});
+    auth.jobs=new JobService({unitOfWork:mysqlJobUnitOfWork(authStore),storeId:settings.storeId,clock:systemClock,ids:uuidGenerator,hash:businessHash});
   }
   const app = buildApi({
     ...(auth ? { auth } : {}),
