@@ -1,0 +1,63 @@
+{
+  "name": "back-venprox",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.16.0 <25"
+  },
+  "scripts": {
+    "dev:api": "node --env-file-if-exists=.env.api --import tsx --watch apps/api/src/main.ts",
+    "dev:local": "node --env-file-if-exists=.env.local --import tsx --watch apps/local-service/src/main.ts",
+    "dev:worker": "node --env-file-if-exists=.env.worker --import tsx --watch apps/worker/src/main.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint --deny-warnings apps packages scripts tests && npm run check:boundaries",
+    "check:boundaries": "node scripts/check-boundaries.mjs",
+    "check:privacy": "node scripts/check-private-files.mjs",
+    "test": "node --import tsx --test tests/*.test.ts tests/*.test.mjs",
+    "check": "npm run typecheck && npm run lint && npm run build && npm test",
+    "start:api": "node --env-file-if-exists=.env.api dist/apps/api/src/main.js",
+    "start:local": "node --env-file-if-exists=.env.local dist/apps/local-service/src/main.js",
+    "start:worker": "node --env-file-if-exists=.env.worker dist/apps/worker/src/main.js",
+    "smoke:local": "node --import tsx scripts/smoke-local.ts",
+    "probe:mysql": "node --env-file-if-exists=.env.mysql-probe --import tsx scripts/probe-mysql.ts",
+    "package:local:windows": "npm run build && node scripts/package-local-windows.mjs",
+    "openapi:export": "node --import tsx scripts/export-openapi.ts",
+    "db:setup": "node --import tsx scripts/setup-b03.ts",
+    "db:init": "node --env-file=.env.b03 --import tsx scripts/database-b03.ts init",
+    "db:status": "node --env-file=.env.b03 --import tsx scripts/database-b03.ts status",
+    "db:backup": "node --env-file=.env.b03 --import tsx scripts/database-b03.ts backup",
+    "test:persistence": "node --env-file=.env.b03 --import tsx --test tests/persistence.test.ts",
+    "auth:init": "node --use-system-ca --env-file=.env.b03 --env-file=.env.remote --import tsx scripts/init-auth.ts",
+    "auth:renew-setup": "node --use-system-ca --env-file=.env.remote --env-file=.env.b04 --import tsx scripts/renew-setup.ts",
+    "dev:api:auth": "node --use-system-ca --env-file=.env.remote --env-file=.env.b04 --import tsx --watch apps/api/src/main.ts",
+    "dev:local:auth": "node --use-system-ca --env-file=.env.local.b04 --import tsx --watch apps/local-service/src/main.ts",
+    "auth:test:setup": "node --env-file=.env.b03 --import tsx scripts/setup-b04-tests.ts",
+    "test:auth": "node --env-file=.env.b03 --import tsx --test tests/auth.test.ts tests/offline-auth.test.ts",
+    "smoke:auth": "node --import tsx scripts/smoke-auth.ts",
+    "auth:backup": "node --use-system-ca --env-file=.env.remote --env-file=.env.b04 --import tsx scripts/backup-auth.ts"
+  },
+  "dependencies": {
+    "@fastify/cookie": "11.1.5",
+    "@fastify/swagger": "9.9.5",
+    "@fastify/swagger-ui": "6.1.5",
+    "@fastify/type-provider-typebox": "6.3.0",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "argon2": "0.45.2",
+    "better-sqlite3": "13.2.0",
+    "fastify": "5.12.8",
+    "mysql2": "3.24.6",
+    "pino": "10.4.0",
+    "typebox": "1.4.7"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "9.6.0",
+    "@types/node": "24.19.2",
+    "oxc-parser": "0.160.0",
+    "oxlint": "1.95.0",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2"
+  }
+}

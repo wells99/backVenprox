@@ -1,0 +1,6 @@
+import type { Migration } from '../../packages/infrastructure/persistence/src/shared.js';
+export const sqliteAuthMigration: Migration = { version: 3, steps: [
+  { table: 'auth_local_device', columns: ['singleton','store_id','device_id','ciphertext'], sql: `CREATE TABLE IF NOT EXISTS auth_local_device(singleton INTEGER PRIMARY KEY CHECK(singleton=1),store_id TEXT NOT NULL,device_id TEXT NOT NULL,ciphertext TEXT NOT NULL,FOREIGN KEY(store_id) REFERENCES instance_identity(store_id))` },
+  { table: 'auth_local_grants', columns: ['user_id','store_id','device_id','login_key','ciphertext','failures','locked_until','last_seen'], sql: `CREATE TABLE IF NOT EXISTS auth_local_grants(user_id TEXT NOT NULL,store_id TEXT NOT NULL,device_id TEXT NOT NULL,login_key TEXT NOT NULL,ciphertext TEXT NOT NULL,failures INTEGER NOT NULL DEFAULT 0,locked_until TEXT,last_seen TEXT NOT NULL,PRIMARY KEY(store_id,user_id),UNIQUE(store_id,login_key),FOREIGN KEY(store_id) REFERENCES instance_identity(store_id))` },
+  { table: 'auth_local_limits', columns: ['store_id','device_id','attempts','window_started'], sql: `CREATE TABLE IF NOT EXISTS auth_local_limits(store_id TEXT NOT NULL,device_id TEXT NOT NULL,attempts INTEGER NOT NULL,window_started TEXT NOT NULL,PRIMARY KEY(store_id,device_id),FOREIGN KEY(store_id) REFERENCES instance_identity(store_id))` },
+] };
