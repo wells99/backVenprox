@@ -5,9 +5,10 @@ import type { AuthService } from '../../../../packages/application/src/auth-serv
 import { ApplicationError } from '../../../../packages/application/src/application-error.js';
 import { ErrorSchema, normalizeLoginKey, normalizeName, successSchema } from '../../../../packages/contracts/src/common.js';
 import * as contracts from '../../../../packages/contracts/src/auth.js';
+import { registerBusinessRoutes, type BusinessHttpServices } from './business.js';
 
 export type AuthHttpService = Pick<AuthService, keyof AuthService>;
-export interface AuthHttpOptions { service: AuthHttpService; origin: string; secureCookies: boolean }
+export interface AuthHttpOptions { service: AuthHttpService; origin: string; secureCookies: boolean; business?:BusinessHttpServices }
 const security = [{ sessionCookie: [] }];
 const errors = { 400: ErrorSchema, 401: ErrorSchema, 403: ErrorSchema, 404: ErrorSchema, 409: ErrorSchema, 413: ErrorSchema, 422: ErrorSchema, 429: ErrorSchema, 500: ErrorSchema, 503: ErrorSchema };
 export async function registerAuthRoutes(scope: FastifyInstance, options: AuthHttpOptions) {
@@ -69,4 +70,5 @@ export async function registerAuthRoutes(scope: FastifyInstance, options: AuthHt
   }
   router.post('/api/v1/auth/offline-grant', { preHandler: mutation, schema: { ...base('authorizeOffline', 'Usuário online e X-Device-Credential válido. Concessão assinada e vinculada à loja/usuário/terminal. Retorna OFFLINE_DISABLED enquanto a loja não definir prazo; nunca distribui hashes de senha.'), body: contracts.EmptyBody,
     response: { ...errors, 200: contracts.OfflineGrantResponse } } }, async (request) => wrap(await service.offlineGrant(access(request), String(request.headers['x-device-credential'] ?? '')), request));
+  if(options.business)registerBusinessRoutes(scope,options.business,(request)=>service.authenticate(access(request)),mutation);
 }

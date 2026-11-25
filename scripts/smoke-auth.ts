@@ -22,13 +22,25 @@ try {
   assert.equal((await fetch(`http://127.0.0.1:${port}/api/v1/auth/me`)).status,401);
   const spec=await(await fetch(`http://127.0.0.1:${port}/openapi.json`)).json() as {paths:object};
   assert.ok(Object.keys(spec.paths).includes('/api/v1/setup/activate'));
+  for(const path of ['/api/v1/products','/api/v1/categories','/api/v1/customers','/api/v1/settings','/api/v1/stock/balances','/api/v1/stock/movements','/api/v1/cash-sessions']){
+    assert.ok(Object.keys(spec.paths).includes(path));assert.equal((await fetch(`http://127.0.0.1:${port}${path}`)).status,401);
+  }
   const unauthenticated=once(local,'message',{signal:AbortSignal.timeout(10000)}); local.send({type:'auth.getContext',request_id:'auth-smoke'});
   assert.equal((await unauthenticated)[0].error.code,'AUTHENTICATION_REQUIRED');
+  const business=once(local,'message',{signal:AbortSignal.timeout(10000)});local.send({type:'settings.get',request_id:'business-smoke'});
+  assert.equal((await business)[0].error.code,'AUTHENTICATION_REQUIRED');
+  for(const command of [{type:'cash.getCurrent'},{type:'sales.getCompletionResult',intention_id:'550e8400-e29b-41d4-a716-446655440000'}]){const result=once(local,'message',{signal:AbortSignal.timeout(10000)});local.send({...command,request_id:'financial-smoke'});assert.equal((await result)[0].error.code,'AUTHENTICATION_REQUIRED');}
   const status=once(local,'message',{signal:AbortSignal.timeout(10000)}); local.send({type:'device.getStatus',request_id:'device-smoke'});
   assert.equal((await status)[0].data.offline_enabled,false);
   api.disconnect(); local.send({type:'shutdown',request_id:'stop-smoke'});
   assert.equal((await stoppedApi)[0],0); assert.equal((await stoppedLocal)[0],0);
-  console.log(JSON.stringify({api_boot:true,unauthenticated_http_rejected:true,unauthenticated_ipc_rejected:true,local_without_mysql_credentials:true,offline_enabled:false,shutdown:true}));
+  console.log(JSON.stringify({api_boot:true,business_routes_registered:true,unauthenticated_http_rejected:true,unauthenticated_ipc_rejected:true,local_without_mysql_credentials:true,offline_enabled:false,shutdown:true}));
 } finally {
-  if(api.exitCode===null)api.kill(); if(local.exitCode===null)local.kill();
+  // Em falhas do smoke, primeiro libera o dono SQLite pelo protocolo normal.
+  for(const [child,mode] of [[local,'local'],[api,'api']] as const){
+    if(child.exitCode!==null||child.signalCode!==null)continue;
+    const exited=once(child,'exit',{signal:AbortSignal.timeout(5000)});
+    if(child.connected){if(mode==='local')child.send({type:'shutdown',request_id:'cleanup-smoke'});else child.disconnect();}else child.kill();
+    await exited.catch(()=>child.kill());
+  }
 }

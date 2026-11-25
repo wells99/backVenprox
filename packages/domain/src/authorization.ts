@@ -1,5 +1,5 @@
 export const permissions = ['users.manage','devices.manage','catalog.read','catalog.write','sales.read','sales.create',
-  'cash.open','cash.close','cash.adjust','stock.adjust','sales.reverse','costs.read','settings.manage','credit.manage','recovery.manage'] as const;
+  'cash.open','cash.close','cash.adjust','stock.adjust','sales.reverse','sales.discount','costs.read','settings.manage','credit.manage','recovery.manage'] as const;
 export type Permission = typeof permissions[number];
 export type Role = 'admin' | 'operator';
 export const rolePermissions: Readonly<Record<Role, readonly Permission[]>> = {

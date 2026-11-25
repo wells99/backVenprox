@@ -1,6 +1,10 @@
 import type { Migration } from '../../packages/infrastructure/persistence/src/shared.js';
 import { sqliteAuthMigration } from './003-auth.js';
 import { sqliteAuthorizationMigration } from './004-authorization-provenance.js';
+import { sqliteCatalogMigration } from './005-catalog.js';
+import { sqliteStockMigration } from './006-stock.js';
+import { sqliteCashMigration } from './007-cash.js';
+import { sqliteSalesMigration } from './008-sales.js';
 
 export const sqliteMigrations: readonly Migration[] = [
   { version: 1, steps: [
@@ -21,4 +25,8 @@ export const sqliteMigrations: readonly Migration[] = [
     sql: 'CREATE INDEX IF NOT EXISTS outbox_pending ON operation_outbox(state,store_id,device_id,device_seq)' }] },
   sqliteAuthMigration,
   sqliteAuthorizationMigration,
+  sqliteCatalogMigration,
+  sqliteStockMigration,
+  sqliteCashMigration,
+  sqliteSalesMigration,
 ];

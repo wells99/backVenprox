@@ -1,6 +1,10 @@
 import type { Migration } from '../../packages/infrastructure/persistence/src/shared.js';
 import { mysqlAuthMigration } from './003-auth.js';
 import { mysqlAuthorizationMigration } from './004-authorization-provenance.js';
+import { mysqlCatalogMigration } from './005-catalog.js';
+import { mysqlStockMigration } from './006-stock.js';
+import { mysqlCashMigration } from './007-cash.js';
+import { mysqlSalesMigration } from './008-sales.js';
 
 const suffix = ' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin';
 export const mysqlMigrations: readonly Migration[] = [
@@ -23,4 +27,8 @@ export const mysqlMigrations: readonly Migration[] = [
     sql: 'CREATE INDEX outbox_pending ON operation_outbox(state,store_id,device_id,device_seq)' }] },
   mysqlAuthMigration,
   mysqlAuthorizationMigration,
+  mysqlCatalogMigration,
+  mysqlStockMigration,
+  mysqlCashMigration,
+  mysqlSalesMigration,
 ];

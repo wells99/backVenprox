@@ -28,6 +28,7 @@ export const ErrorSchema = Type.Object({
     code: Type.String(), message: Type.String(),
     field_errors: Type.Array(Type.Object({ path: Type.String(), code: Type.String(), message: Type.String() }, { additionalProperties: false })),
     retryable: Type.Boolean(), request_id: RequestIdSchema,
+    conflict: Type.Optional(Type.Object({current_version:Type.Integer({minimum:0}),expected_version:Type.Integer({minimum:0})},{additionalProperties:false})),
   }, { additionalProperties: false }),
 }, { additionalProperties: false, example: { error: {
   code: 'INTERNAL_ERROR', message: 'Não foi possível concluir a requisição.',
@@ -35,8 +36,8 @@ export const ErrorSchema = Type.Object({
 } } });
 export type ErrorResponse = Static<typeof ErrorSchema>;
 export function errorResponse(code: string, message: string, requestId: string,
-  fieldErrors: ErrorResponse['error']['field_errors'] = [], retryable = false): ErrorResponse {
-  return { error: { code, message, field_errors: fieldErrors, retryable, request_id: requestId } };
+  fieldErrors: ErrorResponse['error']['field_errors'] = [], retryable = false, conflict?:{current_version:number;expected_version:number}): ErrorResponse {
+  return { error: { code, message, field_errors: fieldErrors, retryable, request_id: requestId,...(conflict?{conflict}:{}) } };
 }
 
 export class ContractInputError extends Error {

@@ -33,7 +33,8 @@ export function buildApi(dependencies: {
 
   app.register(swagger, {
     openapi: { openapi: '3.0.3', info: { title: 'Venprox API', version: '0.1.0', description: 'Contratos HTTP do backend Venprox. Limite global: 64 KiB, profundidade 16, arrays até 100 itens. Sem mutações financeiras nesta etapa.' },
-      tags: [{ name: 'System', description: 'Liveness e compatibilidade de versões.' }, { name: 'Identity', description: 'Setup, sessões, usuários e terminais.' }],
+      tags: [{ name: 'System', description: 'Liveness e compatibilidade de versões.' }, { name: 'Identity', description: 'Setup, sessões, usuários e terminais.' },
+        {name:'Catalog',description:'Categorias, produtos e clientes versionados.'},{name:'Settings',description:'Preferências e escopo da política de estoque.'},{name:'Stock',description:'Livro e projeções recebidos pelo servidor.'}],
       components: { securitySchemes: { sessionCookie: { type: 'apiKey', in: 'cookie', name: 'venprox_access' } } }, },
   });
   if (dependencies.environment === 'development') {
@@ -80,7 +81,7 @@ export function buildApi(dependencies: {
     dependencies.logger.error({ event: 'request_failed', request_id: request.id, status_code: code }, 'Falha na requisição.');
     if (error instanceof ApplicationError) {
       if (code === 429 && Number.isSafeInteger(error.retryAfterSeconds) && error.retryAfterSeconds! >= 0) reply.header('retry-after', error.retryAfterSeconds!);
-      return reply.code(code).send(errorResponse(error.code, error.message, request.id, [], error.retryable));
+      return reply.code(code).send(errorResponse(error.code, error.message, request.id, [], error.retryable,error.conflict));
     }
     const fieldErrors = validation?.map((item) => ({ path: String(item.instancePath ?? ''), code: String(item.keyword ?? 'invalid'), message: 'Campo inválido.' }))
       ?? (error instanceof ContractInputError ? [{ path: `/${error.field}`, code: 'invalid', message: 'Campo inválido.' }] : []);

@@ -54,6 +54,11 @@ export class MysqlStore {
         try {
           for (let index = row?.step ?? 0; index < migration.steps.length; index++) {
             const step = migration.steps[index]!;
+            // Dados e checkpoint de passos UPDATE precisam do mesmo commit.
+            // DDL continua com checkpoints retomáveis e commit implícito do motor.
+            const transactional=step.sql.startsWith('UPDATE ');
+            if(transactional)await connection.beginTransaction();
+            try {
             // DDL tem commit implícito. Após queda, verificar o objeto antes de repetir.
             if (step.sql.startsWith('CREATE INDEX')) {
               const [indexes] = await connection.query<RowDataPacket[]>("SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND INDEX_NAME='outbox_pending'", [step.table]);
@@ -68,6 +73,8 @@ export class MysqlStore {
             if (tables[0]?.ENGINE !== 'InnoDB' || tables[0]?.TABLE_COLLATION !== 'utf8mb4_bin') throw new PersistenceError('SCHEMA_INCOMPATIBLE');
             afterStep?.(migration.version, index);
             await connection.execute("UPDATE schema_migrations SET state='applying',step=? WHERE version=?", [index + 1, migration.version]);
+            if(transactional)await connection.commit();
+            }catch(error){if(transactional)await connection.rollback();throw error;}
           }
           await connection.execute("UPDATE schema_migrations SET state='applied',applied_at=? WHERE version=?", [new Date().toISOString(), migration.version]);
         } catch (error) {

@@ -21,7 +21,7 @@ export function validateOperation(value: OperationRecord, identity: DatabaseIden
   if(value.authorization) {
     const context=value.authorization;
     assertUuid(context.user_id);assertUuid(context.authorization_id);
-    if(context.store_id!==value.store_id || context.device_id!==value.device_id || !Number.isSafeInteger(context.permissions_version) || context.permissions_version<1 ||
+    if(context.store_id!==value.store_id || (context.device_id!==value.device_id&&!(context.device_id===null&&!identity.device_id&&context.authorization_origin==='online')) || !Number.isSafeInteger(context.permissions_version) || context.permissions_version<1 ||
       !['online','offline'].includes(context.authorization_origin) || !Array.isArray(context.permissions)) throw new PersistenceError('IDENTITY_MISMATCH');
   }
 }

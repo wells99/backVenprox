@@ -50,7 +50,7 @@ test('SQLite B03: migração, falha/retomada, transação de agregado/outbox/aud
     store = SqliteStore.open(path, identity, false, true);
     assert.throws(() => store!.assertReady(), failCode('SCHEMA_INCOMPATIBLE'));
     await store.migrate(); await store.migrate();
-    assert.equal(store.status().schema_version, 4);
+    assert.equal(store.status().schema_version, sqliteMigrations.at(-1)!.version);
     assert.equal(store.database.pragma('foreign_keys', { simple: true }), 1);
     assert.equal(store.database.pragma('synchronous', { simple: true }), 2);
     assert.equal(store.database.pragma('journal_mode', { simple: true }), 'wal');
@@ -140,7 +140,7 @@ test('serviço local abre a base B03 provisionada offline, valida identidade/sch
     child.send({ type: 'diagnostics', request_id: 'b03-diagnostic' });
     const [diagnostic] = await received;
     assert.equal(diagnostic.data.persistence_ready, true);
-    assert.equal(diagnostic.data.schema_version, 4);
+    assert.equal(diagnostic.data.schema_version, sqliteMigrations.at(-1)!.version);
     assert.equal(diagnostic.meta.request_id, 'b03-diagnostic');
     const stopped = once(child, 'exit', { signal: AbortSignal.timeout(10000) });
     child.send({ type: 'shutdown', request_id: 'b03-stop' });
@@ -162,7 +162,8 @@ test('MySQL real B03: migrations retomáveis, rollback, concorrência, privilég
   const identity = { store_id: randomUUID() };
   const device = randomUUID();
   const clear = async () => {
-    for (const table of ['auth_replays','auth_grants','auth_limits','auth_invites','auth_sessions','auth_devices','auth_users','auth_roles','auth_installation','probe_aggregate','audit_log','operation_outbox','device_sequences','instance_identity','schema_migrations']) await connection.query(`DROP TABLE IF EXISTS ${table}`);
+    const tables=[...new Set(mysqlMigrations.flatMap((m)=>m.steps).filter((s)=>s.sql.startsWith('CREATE TABLE')).map((s)=>s.table))].reverse();
+    for (const table of ['probe_aggregate',...tables,'schema_migrations']) await connection.query(`DROP TABLE IF EXISTS ${table}`);
   };
   let store: MysqlStore | undefined;
   try {
@@ -172,7 +173,7 @@ test('MySQL real B03: migrations retomáveis, rollback, concorrência, privilég
     await store.close(); store = await MysqlStore.connect(options, identity);
     await store.migrate(mysqlMigrations.slice(0, 1)); await store.provisionIdentity();
     await store.migrate(); await store.migrate();
-    assert.equal((await store.status()).schema_version, 4);
+    assert.equal((await store.status()).schema_version, mysqlMigrations.at(-1)!.version);
     await connection.query("SELECT GET_LOCK(CONCAT('venprox-schema-',DATABASE()),1)");
     try { await assert.rejects(store.migrate(), failCode('DATABASE_BUSY')); }
     finally { await connection.query("SELECT RELEASE_LOCK(CONCAT('venprox-schema-',DATABASE()))"); }

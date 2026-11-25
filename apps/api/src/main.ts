@@ -11,6 +11,12 @@ import { authUnitOfWork } from '../../../packages/infrastructure/mysql/src/auth-
 import { loadAuthConfig } from '../../../packages/infrastructure/runtime/src/auth-config.js';
 import { createAuthCrypto } from '../../../packages/infrastructure/security/src/crypto.js';
 import { systemClock } from '../../../packages/infrastructure/runtime/src/system.js';
+import { CatalogService } from '../../../packages/application/src/catalog-service.js';
+import { StockService } from '../../../packages/application/src/stock-service.js';
+import { CashService } from '../../../packages/application/src/cash-service.js';
+import { mysqlBusinessUnitOfWork } from '../../../packages/infrastructure/mysql/src/business.js';
+import { businessHash } from '../../../packages/infrastructure/persistence/src/business-repository.js';
+import { catalogLabWrites } from '../../../packages/infrastructure/runtime/src/catalog-config.js';
 
 try {
   assertSupportedRuntime();
@@ -21,12 +27,16 @@ try {
   if(process.env.AUTH_ENABLED!==undefined && !['true','false'].includes(process.env.AUTH_ENABLED))throw new ConfigurationError('AUTH_ENABLED');
   if (process.env.AUTH_ENABLED === 'true') {
     const settings = loadAuthConfig(process.env);
+    const remoteWritesEnabled=catalogLabWrites(process.env);
     authStore = await MysqlStore.connect(settings.mysql, { store_id: settings.storeId });
     try { await authStore.assertReady(); await authUnitOfWork(authStore).run(async () => {}); }
     catch (error) { await authStore.close(); throw error; }
     auth = { service: new AuthService({ unitOfWork: authUnitOfWork(authStore), storeId: settings.storeId,
       crypto: createAuthCrypto(settings.privateKey, settings.fingerprintKey), clock: systemClock, ids: uuidGenerator }),
       origin: settings.origin, secureCookies: settings.secureCookies };
+    const business={unitOfWork:mysqlBusinessUnitOfWork(authStore),storeId:settings.storeId,deviceId:uuidGenerator.generate(),local:false,
+      clock:systemClock,ids:uuidGenerator,hash:businessHash,remoteWritesEnabled};
+    auth.business={catalog:new CatalogService(business),stock:new StockService(business),cash:new CashService(business)};
   }
   const app = buildApi({
     ...(auth ? { auth } : {}),

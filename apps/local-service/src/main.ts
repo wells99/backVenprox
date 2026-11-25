@@ -11,12 +11,22 @@ import { openSqliteRuntime } from '../../../packages/infrastructure/sqlite/src/r
 import { openLocalPersistence, SqliteStore } from '../../../packages/infrastructure/sqlite/src/store.js';
 import { LocalAuthService } from '../../../packages/application/src/local-auth.js';
 import { ApplicationError } from '../../../packages/application/src/application-error.js';
+import { PersistenceError } from '../../../packages/application/src/persistence.js';
 import { authIpcCommands, AuthIpcResponse } from '../../../packages/contracts/src/auth.js';
 import { normalizeLoginKey } from '../../../packages/contracts/src/common.js';
 import { sqliteAuthCache } from '../../../packages/infrastructure/sqlite/src/auth-cache.js';
 import { windowsSecretProtector } from '../../../packages/infrastructure/native/src/dpapi.js';
 import { identityGateway } from '../../../packages/infrastructure/security/src/identity-gateway.js';
 import { createAuthCrypto, generateAuthKeys } from '../../../packages/infrastructure/security/src/crypto.js';
+import { CatalogService } from '../../../packages/application/src/catalog-service.js';
+import { StockService } from '../../../packages/application/src/stock-service.js';
+import { CashService } from '../../../packages/application/src/cash-service.js';
+import { SalesService } from '../../../packages/application/src/sales-service.js';
+import { sqliteBusinessUnitOfWork } from '../../../packages/infrastructure/sqlite/src/business.js';
+import { businessHash } from '../../../packages/infrastructure/persistence/src/business-repository.js';
+import { uuidGenerator } from '../../../packages/infrastructure/runtime/src/system.js';
+import { businessIpcCommands, BusinessIpcResponse, businessEnvelope } from '../../../packages/contracts/src/catalog-stock.js';
+import { executeBusiness } from './business.js';
 
 try {
   assertSupportedRuntime();
@@ -26,6 +36,11 @@ try {
     : await openLocalPersistence(config.databasePath, config.identity!);
   const getDiagnostics = createGetLocalDiagnostics(sqlite.repository, systemClock);
   let localAuth: LocalAuthService | undefined;
+  const business='store' in sqlite&&sqlite.store instanceof SqliteStore?{unitOfWork:sqliteBusinessUnitOfWork(sqlite.store),
+    storeId:config.identity!.store_id,deviceId:config.identity!.device_id,local:true,clock:systemClock,ids:uuidGenerator,hash:businessHash,remoteWritesEnabled:false}:undefined;
+  const catalog=business?new CatalogService(business):undefined,stock=business?new StockService(business):undefined;
+  const cash=business?new CashService(business):undefined;
+  const sales=business?new SalesService(business,async()=>String((await localAuth?.deviceStatus())?.code??'')):undefined;
   if ('store' in sqlite && sqlite.store instanceof SqliteStore && process.env.AUTH_API_ORIGIN) {
     const ephemeral = generateAuthKeys();
     localAuth = new LocalAuthService({ storeId: config.identity!.store_id, deviceId: config.identity!.device_id,
@@ -45,6 +60,21 @@ try {
     },
   });
   async function onMessage(message: unknown) {
+    if(withinPayloadLimits(message)&&Value.Check(businessIpcCommands,message)){
+      try{
+        if(!localAuth||!catalog||!stock)throw new ApplicationError('BUSINESS_NOT_CONFIGURED','Operação local não configurada.','unavailable');
+        const {context}=await localAuth.getContext();
+        const data=await executeBusiness(message,context,catalog,stock,cash,sales);
+        const result=businessEnvelope(data,message.request_id);
+        if(!Value.Check(BusinessIpcResponse,result))throw new Error('INVALID_IPC_OUTPUT');
+        if(process.connected)process.send?.(result);
+      }catch(error){
+        const response=error instanceof ApplicationError?errorResponse(error.code,error.message,message.request_id,[],error.retryable,error.conflict)
+          :error instanceof PersistenceError?errorResponse(error.code,'Não foi possível gravar ou consultar os dados locais. Preserve a intenção e confira o resultado antes de tentar novamente.',message.request_id,[],error.retryable)
+          :errorResponse('BUSINESS_UNAVAILABLE','Não foi possível concluir a operação local.',message.request_id);
+        if(process.connected)process.send?.({type:'error',...response});
+      }return;
+    }
     if (withinPayloadLimits(message) && Value.Check(authIpcCommands,message)) {
       try {
         if (!localAuth) throw new ApplicationError('AUTH_NOT_CONFIGURED','Identidade local não configurada.','unavailable');
