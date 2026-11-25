@@ -8,8 +8,8 @@ import { idCursor } from '../../domain/src/cursors.js';
 
 export class CashService extends BusinessBase {
   local(){if(!this.deps.local)throw new ApplicationError('LOCAL_CASH_ONLY','Caixa é operado no terminal local.','forbidden');}
-  async requireOpen(tx:BusinessTransaction,context:BusinessContext,id:string):Promise<CashSession>{
-    this.local();this.authorize(context,'sales.create');
+  async requireOpen(tx:BusinessTransaction,context:BusinessContext,id:string,permission:'sales.create'|'sales.reverse'|'cash.close'='sales.create'):Promise<CashSession>{
+    this.local();this.authorize(context,permission);
     const session=await tx.business.cashSession(id);
     if(!session||session.device_id!==this.deps.deviceId)throw businessConflict('CASH_SESSION_REQUIRED','Abra o caixa deste terminal antes de continuar.');
     if(session.status!=='open')throw businessConflict('CASH_SESSION_CLOSED','A sessão de caixa está fechada.');return session;
@@ -61,6 +61,11 @@ export class CashService extends BusinessBase {
   async recordPayments(tx:BusinessTransaction,context:BusinessContext,sessionId:string,operation:string,saleId:string,payments:readonly {id:string;method:PaymentMethod;applied_cents:number}[]){
     const session=await this.requireOpen(tx,context,sessionId),movements:CashMovement[]=[];
     for(const payment of payments){if(!validMoney(payment.applied_cents)||payment.applied_cents===0)throw businessError('INVALID_PAYMENT');movements.push(await this.append(tx,context,session,operation,saleId,payment.id,'sale',payment.method,payment.applied_cents,'Venda'));}
+    await tx.business.cashTotals(session.id);await tx.business.bumpCashSession(session.id);return movements;
+  }
+  async recordRefunds(tx:BusinessTransaction,context:BusinessContext,sessionId:string,operation:string,reversalId:string,payments:readonly {id:string;method:PaymentMethod;amount_cents:number}[],reason:string){
+    const session=await this.requireOpen(tx,context,sessionId,'sales.reverse'),movements:CashMovement[]=[];
+    for(const payment of payments){if(!validMoney(payment.amount_cents)||payment.amount_cents===0)throw businessError('INVALID_REFUND');movements.push(await this.append(tx,context,session,operation,reversalId,payment.id,'refund',payment.method,-payment.amount_cents,reason));}
     await tx.business.cashTotals(session.id);await tx.business.bumpCashSession(session.id);return movements;
   }
 }

@@ -2,10 +2,16 @@ import type { CatalogService } from '../../../packages/application/src/catalog-s
 import type { StockService } from '../../../packages/application/src/stock-service.js';
 import type { CashService } from '../../../packages/application/src/cash-service.js';
 import type { SalesService } from '../../../packages/application/src/sales-service.js';
+import type { ReversalService } from '../../../packages/application/src/reversal-service.js';
+import type { ClosureService } from '../../../packages/application/src/closure-service.js';
 import type { BusinessContext } from '../../../packages/application/src/business-ports.js';
 import type { BusinessIpcCommand } from '../../../packages/contracts/src/catalog-stock.js';
-export async function executeBusiness(message:BusinessIpcCommand,context:BusinessContext,catalog:CatalogService,stock:StockService,cash?:CashService,sales?:SalesService):Promise<unknown>{
+export async function executeBusiness(message:BusinessIpcCommand,context:BusinessContext,catalog:CatalogService,stock:StockService,cash?:CashService,sales?:SalesService,reversal?:ReversalService,closure?:ClosureService):Promise<unknown>{
   switch(message.type){
+    case 'sales.reverse':return reversal!.reverse(context,message.intention_id,message.input);
+    case 'cash.previewClose':return closure!.preview(context,message.session_id);
+    case 'cash.close':return closure!.close(context,message.intention_id,message.input);
+    case 'cash.getClosure':return closure!.get(context,message.session_id);
     case 'sales.createDraft':return sales!.createDraft(context,message.intention_id,message.sale_id,message.input);
     case 'sales.getDraft':return sales!.getDraft(context,message.sale_id);
     case 'sales.updateDraft':return sales!.updateDraft(context,message.intention_id,message.sale_id,message.expected_version,message.input);

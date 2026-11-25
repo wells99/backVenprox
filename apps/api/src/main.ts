@@ -17,6 +17,10 @@ import { CashService } from '../../../packages/application/src/cash-service.js';
 import { mysqlBusinessUnitOfWork } from '../../../packages/infrastructure/mysql/src/business.js';
 import { businessHash } from '../../../packages/infrastructure/persistence/src/business-repository.js';
 import { catalogLabWrites } from '../../../packages/infrastructure/runtime/src/catalog-config.js';
+import { SyncService } from '../../../packages/application/src/sync-service.js';
+import { mysqlSyncUnitOfWork } from '../../../packages/infrastructure/mysql/src/sync.js';
+import { syncLabWrites } from '../../../packages/infrastructure/runtime/src/sync-config.js';
+import { laboratoryPublication, syncEnvelopeHash, syncHashValue, validateSyncPayload } from '../../../packages/infrastructure/security/src/sync-validation.js';
 
 try {
   assertSupportedRuntime();
@@ -37,6 +41,8 @@ try {
     const business={unitOfWork:mysqlBusinessUnitOfWork(authStore),storeId:settings.storeId,deviceId:uuidGenerator.generate(),local:false,
       clock:systemClock,ids:uuidGenerator,hash:businessHash,remoteWritesEnabled};
     auth.business={catalog:new CatalogService(business),stock:new StockService(business),cash:new CashService(business)};
+    const syncCrypto=createAuthCrypto(settings.privateKey,settings.fingerprintKey);
+    auth.sync=new SyncService({unitOfWork:mysqlSyncUnitOfWork(authStore),storeId:settings.storeId,clock:systemClock,ids:uuidGenerator,digest:syncCrypto.digest,hashEnvelope:syncEnvelopeHash,hashValue:syncHashValue,validatePayload:validateSyncPayload,verifyOriginSignature:(signature)=>syncCrypto.verifyGrant(signature,syncCrypto.publicKey()),publication:laboratoryPublication,writesEnabled:syncLabWrites(process.env)});
   }
   const app = buildApi({
     ...(auth ? { auth } : {}),

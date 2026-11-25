@@ -25,6 +25,8 @@ try {
   for(const path of ['/api/v1/products','/api/v1/categories','/api/v1/customers','/api/v1/settings','/api/v1/stock/balances','/api/v1/stock/movements','/api/v1/cash-sessions']){
     assert.ok(Object.keys(spec.paths).includes(path));assert.equal((await fetch(`http://127.0.0.1:${port}${path}`)).status,401);
   }
+  for(const path of ['/api/v1/sync/push','/api/v1/sync/device-state','/api/v1/sync/receipts/{operation_id}'])assert.ok(Object.keys(spec.paths).includes(path));
+  assert.equal((await fetch(`http://127.0.0.1:${port}/api/v1/sync/device-state`,{headers:{'x-device-credential':'x'.repeat(43)}})).status,401);
   const unauthenticated=once(local,'message',{signal:AbortSignal.timeout(10000)}); local.send({type:'auth.getContext',request_id:'auth-smoke'});
   assert.equal((await unauthenticated)[0].error.code,'AUTHENTICATION_REQUIRED');
   const business=once(local,'message',{signal:AbortSignal.timeout(10000)});local.send({type:'settings.get',request_id:'business-smoke'});

@@ -13,7 +13,7 @@ const contractService: AuthHttpService = { authenticate:unavailable,activate:una
   invitation:unavailable,enroll:unavailable,devices:unavailable,changeDevice:unavailable,offlineGrant:unavailable };
 
 const app = buildApi({ logger: createLogger('openapi-export', 'silent'), ids: uuidGenerator,
-  auth:{service:contractService,origin:'https://example.invalid',secureCookies:true,business:{
+  auth:{service:contractService,origin:'https://example.invalid',secureCookies:true,sync:{push:unavailable,getReceipt:unavailable,deviceState:unavailable},business:{
     catalog:{list:unavailable,get:unavailable,createCategory:unavailable,updateCategory:unavailable,createProduct:unavailable,updateProduct:unavailable,createCustomer:unavailable,updateCustomer:unavailable,settings:unavailable,changeSettings:unavailable},
     stock:{balances:unavailable,movements:unavailable},cash:{list:unavailable,get:unavailable,movements:unavailable}}},
   getCompatibility: createGetCompatibility(createCompatibilityPolicy('0.1.0', [1]), '0.1.0') });

@@ -4,6 +4,7 @@ import type { PersistenceRepositories } from './persistence.js';
 import type { Clock, IdGenerator, UnitOfWork } from './ports.js';
 import type { CashRepository } from './cash-ports.js';
 import type { SalesRepository } from './sales-ports.js';
+import type { ReversalRepository } from './reversal-ports.js';
 
 export interface Category {id:string;store_id:string;name:string;search_key:string;active:boolean;version:number}
 export interface Product {id:string;store_id:string;name:string;search_key:string;internal_code:string;code_key:string;unit:Unit;price_cents:number;cost_cents:number|null;category_id:string|null;active:boolean;version:number;barcodes:string[]}
@@ -18,7 +19,7 @@ export interface Intention {intention_id:string;store_id:string;actor_id:string;
 export interface StockBalance {store_id:string;product_id:string;quantity_milli:number;version:number}
 export interface StockMovement {id:string;store_id:string;product_id:string;device_id:string;operator_id:string;kind:'entry'|'opening'|'adjustment'|'sale'|'reversal';origin_id:string;item_id:string;delta_milli:number;before_milli:number;after_milli:number;unit:Unit;unit_cost_cents:number|null;reason:string;occurred_at:string;authorization_context:string}
 export interface MovementQuery {product_id?:string;from?:string;to?:string;after_at?:string;after_id?:string;limit:number}
-export interface BusinessRepository extends CashRepository, SalesRepository {
+export interface BusinessRepository extends CashRepository, SalesRepository, ReversalRepository {
   lockScope():Promise<void>;
   category(id:string):Promise<Category|undefined>;saveCategory(value:Category):Promise<void>;
   product(id:string):Promise<Product|undefined>;saveProduct(value:Product):Promise<void>;codeOwner(key:string):Promise<string|undefined>;barcodeOwner(barcode:string):Promise<string|undefined>;

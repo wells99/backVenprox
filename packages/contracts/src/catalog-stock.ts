@@ -2,6 +2,7 @@ import { Type, type Static, type TSchema } from 'typebox';
 import { BarcodeSchema, CentsSchema, DecimalCursorSchema, MetaSchema, QuantityMilliSchema, RequestIdSchema, UtcInstantSchema, UuidSchema, successSchema } from './common.js';
 import { cashCommands, CashResult, CashAdjustmentResult, CashPage, CashMovements } from './cash.js';
 import { salesCommands, DraftResult, CompletionResult } from './sales.js';
+import { reversalCommands, ReversalResult, ClosureResult, ClosurePreview } from './reversals.js';
 const closed={additionalProperties:false};
 const Name=Type.String({minLength:1,maxLength:1024,description:'NFC/trim, até 120 caracteres normalizados.'});
 const Version=Type.Integer({minimum:1,maximum:2147483646});
@@ -58,6 +59,7 @@ const intention={intention_id:UuidSchema};
 export const businessIpcCommands=Type.Union([
   cashCommands,
   salesCommands,
+  reversalCommands,
   command('catalog.search',{entity_type:EntityKind,query:NativeListQuery}),
   command('catalog.getPending',{entity_type:Type.Optional(Type.Union([EntityKind,Type.Literal('settings')]))}),
   command('products.proposeCreate',{...intention,input:ProductInput}),
@@ -88,6 +90,7 @@ const IpcSettings=Type.Object({store:StoreSettings,terminal:Type.Optional(Termin
 export const BusinessIpcResponse=Type.Object({type:Type.Literal('business.result'),data:Type.Union([
   CashResult,CashAdjustmentResult,CashPage,CashMovements,
   DraftResult,CompletionResult,
+  ReversalResult,ClosureResult,ClosurePreview,
   Type.Object({items:Type.Array(Entity,{maxItems:100})},closed),Type.Object({items:Type.Array(BalanceItem,{maxItems:100})},closed),Type.Object({items:Type.Array(Movement,{maxItems:100})},closed),Proposal,IpcSettings,TerminalSettings,
   Type.Object({items:Type.Array(Proposal,{maxItems:100})},closed),
   Type.Object({movement:Movement,balance:Balance},closed),CountResult,Balance]),meta:MetaSchema},closed);

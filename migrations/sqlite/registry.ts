@@ -5,6 +5,8 @@ import { sqliteCatalogMigration } from './005-catalog.js';
 import { sqliteStockMigration } from './006-stock.js';
 import { sqliteCashMigration } from './007-cash.js';
 import { sqliteSalesMigration } from './008-sales.js';
+import { sqliteReversalMigration } from './009-reversals.js';
+import { sqliteSyncMigration } from './010-sync-protocol.js';
 
 export const sqliteMigrations: readonly Migration[] = [
   { version: 1, steps: [
@@ -29,4 +31,6 @@ export const sqliteMigrations: readonly Migration[] = [
   sqliteStockMigration,
   sqliteCashMigration,
   sqliteSalesMigration,
+  sqliteReversalMigration,
+  sqliteSyncMigration,
 ];

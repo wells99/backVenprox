@@ -5,6 +5,8 @@ import { mysqlCatalogMigration } from './005-catalog.js';
 import { mysqlStockMigration } from './006-stock.js';
 import { mysqlCashMigration } from './007-cash.js';
 import { mysqlSalesMigration } from './008-sales.js';
+import { mysqlReversalMigration } from './009-reversals.js';
+import { mysqlSyncMigration } from './010-sync.js';
 
 const suffix = ' ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin';
 export const mysqlMigrations: readonly Migration[] = [
@@ -31,4 +33,6 @@ export const mysqlMigrations: readonly Migration[] = [
   mysqlStockMigration,
   mysqlCashMigration,
   mysqlSalesMigration,
+  mysqlReversalMigration,
+  mysqlSyncMigration,
 ];

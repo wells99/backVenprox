@@ -14,6 +14,10 @@ export const LocalDiagnosticsSchema = Type.Object({
 export const LocalErrorSchema = Type.Object({ type: Type.Literal('error'), error: ErrorSchema.properties.error }, { additionalProperties: false });
 export type LocalDiagnostics = Static<typeof LocalDiagnosticsSchema>;
 export const ipcCatalog = {
+  'sales.reverse':{dto:'businessIpcCommands',permission:'sales.reverse',use_case:'ReversalService.reverse',response:'BusinessIpcResponse'},
+  'cash.previewClose':{dto:'businessIpcCommands',permission:'cash.close',use_case:'ClosureService.preview',response:'BusinessIpcResponse'},
+  'cash.close':{dto:'businessIpcCommands',permission:'cash.close',use_case:'ClosureService.close',response:'BusinessIpcResponse'},
+  'cash.getClosure':{dto:'businessIpcCommands',permission:'sales.read',use_case:'ClosureService.get',response:'BusinessIpcResponse'},
   'sales.createDraft':{dto:'businessIpcCommands',permission:'sales.create (+sales.discount)',use_case:'SalesService.createDraft',response:'BusinessIpcResponse'},
   'sales.getDraft':{dto:'businessIpcCommands',permission:'sales.read',use_case:'SalesService.getDraft',response:'BusinessIpcResponse'},
   'sales.updateDraft':{dto:'businessIpcCommands',permission:'sales.create (+sales.discount)',use_case:'SalesService.updateDraft',response:'BusinessIpcResponse'},

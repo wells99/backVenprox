@@ -60,7 +60,12 @@ test('B07/B08 processo Windows real: login online, venda sem servidor, reinício
     await start();assert.equal((await send({type:'sales.getCompletionResult',intention_id:intent})).error.code,'AUTHENTICATION_REQUIRED');assert.equal((await send({type:'auth.loginOffline',login:'owner',password})).error.code,'OFFLINE_DISABLED');
     app=makeApp();await app.listen({host:'127.0.0.1',port});assert.equal((await send({type:'auth.loginOnline',login:'owner',password})).type,'auth.result');
     assert.deepEqual((await send({type:'sales.getCompletionResult',intention_id:intent})).data,completed.data);
-    await app.close();assert.deepEqual((await send({type:'sales.complete',intention_id:intent,input})).data,completed.data);await stop();
+    await app.close();assert.deepEqual((await send({type:'sales.complete',intention_id:intent,input})).data,completed.data);
+    const preview=await send({type:'cash.previewClose',session_id:opened.data.session.id});assert.equal(preview.type,'business.result');
+    const closed=await send({type:'cash.close',intention_id:randomUUID(),input:{session_id:opened.data.session.id,expected_version:preview.data.preview.session_version,expected_device_seq:preview.data.preview.previous_device_seq,counted_by_method:preview.data.preview.expected_by_method,reason:null}});assert.equal(closed.data.closure.state,'closed_local');
+    const next=await send({type:'cash.open',intention_id:randomUUID(),input:{opening_cents:0,business_date:businessDate(new Date().toISOString(),'America/Sao_Paulo'),time_zone:'America/Sao_Paulo'}});
+    const reversed=await send({type:'sales.reverse',intention_id:randomUUID(),input:{sale_id:saleId,session_id:next.data.session.id,reason:'Cancelamento de laboratório',payments:[{id:randomUUID(),method:'cash',amount_cents:99},{id:randomUUID(),method:'pix',amount_cents:100}]}});assert.equal(reversed.data.reversal.total_cents,199);
+    assert.deepEqual((await send({type:'cash.getClosure',session_id:opened.data.session.id})).data,closed.data);await stop();
     assert.equal(logs.join('').includes(password),false);
   }finally{if(child){const exited=once(child,'exit');child.kill();await exited;}await app.close();await f.close();}
 });

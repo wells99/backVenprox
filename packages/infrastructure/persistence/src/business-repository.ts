@@ -3,6 +3,7 @@ import type { BusinessRepository, Category, Customer, Entity, EntityKind, Intent
 import { ApplicationError } from '../../../application/src/application-error.js';
 import { cashRepository } from './cash-repository.js';
 import { salesRepository } from './sales-repository.js';
+import { reversalRepository } from './reversal-repository.js';
 
 export interface BusinessSql { all(sql:string,values?:unknown[]):Promise<Record<string,unknown>[]>;run(sql:string,values?:unknown[]):Promise<void>;forUpdate:string;active():void }
 const moneyFields=new Set(['price_cents','cost_cents','quantity_milli','delta_milli','before_milli','after_milli','unit_cost_cents','version','base_version']);
@@ -67,6 +68,7 @@ export function businessRepository(sql:BusinessSql,storeId:string):BusinessRepos
   return {
     ...cashRepository(sql,storeId),
     ...salesRepository(sql,storeId),
+    ...reversalRepository(sql,storeId),
     lockScope:async()=>{sql.active();await sql.all(`SELECT store_id FROM instance_identity WHERE store_id=?${sql.forUpdate}`,[storeId]);},
     category:(id)=>one<Category>('categories','AND id=?',[id]),saveCategory:(value)=>save('categories',value,['store_id','id']),
     product,saveProduct,codeOwner:async(key)=>(await one<{id:string}>('products','AND code_key=?',[key]))?.id,

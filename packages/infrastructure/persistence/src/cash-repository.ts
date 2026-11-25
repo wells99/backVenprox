@@ -21,6 +21,7 @@ export function cashRepository(sql:BusinessSql,storeId:string):CashRepository {
       if(Object.values(totals).some((n)=>n>BigInt(Number.MAX_SAFE_INTEGER)||n<BigInt(-Number.MAX_SAFE_INTEGER)))throw new ApplicationError('CASH_TOTAL_OUT_OF_RANGE','Total de caixa fora da faixa.','content');
       return Object.fromEntries(Object.entries(totals).map(([key,n])=>[key,Number(n)])) as Record<PaymentMethod,number>;
     },
-    cashPending:async(id)=>{sql.active();return (await sql.all("SELECT m.id FROM cash_movements m JOIN operation_outbox o ON o.store_id=m.store_id AND o.operation_id=m.operation_id WHERE m.store_id=? AND m.session_id=? AND o.state='pending' LIMIT 1",[storeId,id])).length>0;},
+    cashPending:async(id)=>{sql.active();if((await sql.all("SELECT m.id FROM cash_movements m JOIN operation_outbox o ON o.store_id=m.store_id AND o.operation_id=m.operation_id WHERE m.store_id=? AND m.session_id=? AND o.state='pending' LIMIT 1",[storeId,id])).length)return true;
+      return (await sql.all("SELECT c.id FROM cash_closures c JOIN operation_outbox o ON o.store_id=c.store_id AND o.operation_id=c.intention_id WHERE c.store_id=? AND c.session_id=? AND o.state='pending' LIMIT 1",[storeId,id])).length>0;},
   };
 }

@@ -67,7 +67,7 @@ export function validateTimeZone(value: string): string {
   return value;
 }
 
-export function withinPayloadLimits(value: unknown, maxDepth = 16, maxItems = 1000): boolean {
+export function withinPayloadLimits(value: unknown, maxDepth = 16, maxItems = 1000, maxBytes = 65536): boolean {
   const pending: { value: unknown; depth: number }[] = [{ value, depth: 0 }];
   let count = 0;
   let bytes = 0;
@@ -77,7 +77,7 @@ export function withinPayloadLimits(value: unknown, maxDepth = 16, maxItems = 10
     if (typeof entry.value === 'string') {
       if (entry.value.length > 65536) return false;
       bytes += new TextEncoder().encode(entry.value).length;
-      if (bytes > 65536) return false;
+      if (bytes > maxBytes) return false;
     }
     if (entry.value && typeof entry.value === 'object') {
       if (Array.isArray(entry.value) && entry.value.length > 100) return false;

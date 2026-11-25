@@ -40,7 +40,8 @@
     "business:test:setup": "node --env-file=.env.b03 --import tsx scripts/setup-b05-tests.ts",
     "test:business": "node --env-file=.env.b03 --import tsx --test tests/business.test.ts",
     "financial:test:setup": "node --env-file=.env.b03 --import tsx scripts/setup-financial-tests.ts",
-    "test:financial": "node --env-file=.env.b03 --import tsx --test tests/cash.test.ts tests/sales.test.ts tests/financial-process.test.ts"
+    "test:financial": "node --env-file=.env.b03 --import tsx --test tests/cash.test.ts tests/sales.test.ts tests/reversals.test.ts tests/financial-process.test.ts",
+    "test:sync": "node --env-file=.env.b03 --import tsx --test tests/sync.test.ts"
   },
   "dependencies": {
     "@fastify/cookie": "11.1.5",

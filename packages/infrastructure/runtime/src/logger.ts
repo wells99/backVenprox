@@ -12,7 +12,7 @@ export function createLogger(service: string, level: LogLevel, destination?: Des
         'installation_token','invitation_token','device_credential','access','refresh','csrf','private_key','password_hash',
         '*.password', '*.token', '*.secret', '*.authorization', '*.cookie',
         '*.installation_token','*.invitation_token','*.device_credential','*.access','*.refresh','*.csrf','*.password_hash',
-        'req.headers.authorization', 'req.headers.cookie', 'res.headers["set-cookie"]',
+        'req.headers.authorization', 'req.headers.cookie', 'req.headers["x-device-credential"]', 'res.headers["set-cookie"]',
         'req.body', 'body', 'connection', 'database_url',
       ],
       censor: '[REDACTED]',

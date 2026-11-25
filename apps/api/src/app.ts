@@ -32,17 +32,18 @@ export function buildApi(dependencies: {
   });
 
   app.register(swagger, {
-    openapi: { openapi: '3.0.3', info: { title: 'Venprox API', version: '0.1.0', description: 'Contratos HTTP do backend Venprox. Limite global: 64 KiB, profundidade 16, arrays até 100 itens. Sem mutações financeiras nesta etapa.' },
+    openapi: { openapi: '3.0.3', info: { title: 'Venprox API', version: '0.1.0', description: 'Contratos HTTP do backend Venprox. Limite geral: 64 KiB, profundidade 16, arrays até 100 itens. /sync/push tem limite próprio de 512 KiB/50 operações; recepção operacional bloqueada até B11. Mutações financeiras locais via IPC.' },
       tags: [{ name: 'System', description: 'Liveness e compatibilidade de versões.' }, { name: 'Identity', description: 'Setup, sessões, usuários e terminais.' },
-        {name:'Catalog',description:'Categorias, produtos e clientes versionados.'},{name:'Settings',description:'Preferências e escopo da política de estoque.'},{name:'Stock',description:'Livro e projeções recebidos pelo servidor.'}],
-      components: { securitySchemes: { sessionCookie: { type: 'apiKey', in: 'cookie', name: 'venprox_access' } } }, },
+        {name:'Catalog',description:'Categorias, produtos e clientes versionados.'},{name:'Settings',description:'Preferências e escopo da política de estoque.'},{name:'Stock',description:'Livro e projeções recebidos pelo servidor.'},{name:'Sync',description:'Recepção idempotente autenticada por terminal; liberação depende de B11.'}],
+      components: { securitySchemes: { sessionCookie: { type: 'apiKey', in: 'cookie', name: 'venprox_access' },deviceCredential:{type:'apiKey',in:'header',name:'X-Device-Credential'} } }, },
   });
   if (dependencies.environment === 'development') {
     app.register(swaggerUi, { routePrefix: '/docs' });
     app.get('/openapi.json', { schema: { hide: true } }, async () => app.swagger());
   }
   app.addHook('preValidation', async (request, reply) => {
-    if (!withinPayloadLimits(request.body)) {
+    const sync=request.routeOptions.url==='/api/v1/sync/push';
+    if (!withinPayloadLimits(request.body,sync?24:16,sync?50000:1000,sync?512*1024:65536)) {
       return reply.code(422).send(errorResponse('PAYLOAD_LIMIT_EXCEEDED', 'Estrutura do conteúdo excede o limite permitido.', request.id));
     }
   });

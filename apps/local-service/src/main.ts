@@ -22,6 +22,8 @@ import { CatalogService } from '../../../packages/application/src/catalog-servic
 import { StockService } from '../../../packages/application/src/stock-service.js';
 import { CashService } from '../../../packages/application/src/cash-service.js';
 import { SalesService } from '../../../packages/application/src/sales-service.js';
+import { ReversalService } from '../../../packages/application/src/reversal-service.js';
+import { ClosureService } from '../../../packages/application/src/closure-service.js';
 import { sqliteBusinessUnitOfWork } from '../../../packages/infrastructure/sqlite/src/business.js';
 import { businessHash } from '../../../packages/infrastructure/persistence/src/business-repository.js';
 import { uuidGenerator } from '../../../packages/infrastructure/runtime/src/system.js';
@@ -41,6 +43,7 @@ try {
   const catalog=business?new CatalogService(business):undefined,stock=business?new StockService(business):undefined;
   const cash=business?new CashService(business):undefined;
   const sales=business?new SalesService(business,async()=>String((await localAuth?.deviceStatus())?.code??'')):undefined;
+  const reversal=business?new ReversalService(business):undefined,closure=business?new ClosureService(business):undefined;
   if ('store' in sqlite && sqlite.store instanceof SqliteStore && process.env.AUTH_API_ORIGIN) {
     const ephemeral = generateAuthKeys();
     localAuth = new LocalAuthService({ storeId: config.identity!.store_id, deviceId: config.identity!.device_id,
@@ -64,7 +67,7 @@ try {
       try{
         if(!localAuth||!catalog||!stock)throw new ApplicationError('BUSINESS_NOT_CONFIGURED','Operação local não configurada.','unavailable');
         const {context}=await localAuth.getContext();
-        const data=await executeBusiness(message,context,catalog,stock,cash,sales);
+        const data=await executeBusiness(message,context,catalog,stock,cash,sales,reversal,closure);
         const result=businessEnvelope(data,message.request_id);
         if(!Value.Check(BusinessIpcResponse,result))throw new Error('INVALID_IPC_OUTPUT');
         if(process.connected)process.send?.(result);
