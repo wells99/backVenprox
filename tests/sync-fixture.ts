@@ -20,7 +20,7 @@ import type { Product } from '../packages/application/src/business-ports.js';
 import { createAuthCrypto, generateAuthKeys } from '../packages/infrastructure/security/src/crypto.js';
 import { laboratoryPublication, syncEnvelopeHash, syncHashValue, validateSyncPayload } from '../packages/infrastructure/security/src/sync-validation.js';
 
-export async function syncFixture(stage:'b10'|'b11'|'b12'|'b13'|'b13_load'|'b12_final'='b10'){
+export async function syncFixture(stage:'b10'|'b11'|'b12'|'b13'|'b13_load'|'b12_final'|'b14'|'b18'='b10'){
   const f=await financialFixture('mysql',stage);if(!(f.store instanceof MysqlStore))throw new Error('MYSQL_REQUIRED');
   const store=f.store;
   const keys=generateAuthKeys(),crypto=createAuthCrypto(keys.privateKey,keys.fingerprintKey),token=crypto.token(),auth=new AuthService({unitOfWork:authUnitOfWork(f.store),storeId:f.identity.store_id,clock:f.deps.clock,ids:f.deps.ids,crypto});

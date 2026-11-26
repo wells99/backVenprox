@@ -1,0 +1,4 @@
+-- Execute only after replacing/reviewing identifiers with the provider administrator.
+-- Account creation/passwords are intentionally excluded from the distributable.
+GRANT SELECT, INSERT, UPDATE, DELETE ON VENPROX_DATABASE.* TO 'VENPROX_API_USER'@'VENPROX_API_HOST';
+-- No CREATE, ALTER, DROP, FILE, PROCESS or GRANT OPTION. Migrations use a separate account.

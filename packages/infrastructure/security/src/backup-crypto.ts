@@ -1,0 +1,10 @@
+import { createCipheriv,createDecipheriv,createHash,randomBytes } from 'node:crypto';
+import { createReadStream,createWriteStream } from 'node:fs';
+import { readFile,stat } from 'node:fs/promises';
+import { pipeline } from 'node:stream/promises';
+import { ApplicationError } from '../../../application/src/application-error.js';
+export const backupFailure=(code:string)=>new ApplicationError(code,'A cópia não foi liberada. Preserve os arquivos e confira a configuração/relatório.','conflict');
+export async function backupKey(file:string){const raw=(await readFile(file,'utf8')).trim();if(!/^[a-fA-F0-9]{64}$/.test(raw))throw backupFailure('BACKUP_KEY_INVALID');return Buffer.from(raw,'hex');}
+export async function fileDigest(file:string){const hash=createHash('sha256');for await(const part of createReadStream(file))hash.update(part);return hash.digest('hex');}
+export async function encryptBackup(source:string,destination:string,key:Buffer,descriptor:unknown){const nonce=randomBytes(12),cipher=createCipheriv('aes-256-gcm',key,nonce);cipher.setAAD(Buffer.from(JSON.stringify(descriptor)));await pipeline(createReadStream(source),cipher,createWriteStream(destination,{flags:'wx',mode:0o600}));return {algorithm:'aes-256-gcm' as const,nonce:nonce.toString('hex'),tag:cipher.getAuthTag().toString('hex'),sha256:await fileDigest(destination),bytes:(await stat(destination)).size};}
+export async function decryptBackup(source:string,destination:string,key:Buffer,descriptor:unknown,sealed:{nonce:string;tag:string;sha256:string;bytes:number}){if(!/^[a-f0-9]{24}$/.test(sealed.nonce)||!/^[a-f0-9]{32}$/.test(sealed.tag)||!/^[a-f0-9]{64}$/.test(sealed.sha256)||(await stat(source)).size!==sealed.bytes||await fileDigest(source)!==sealed.sha256)throw backupFailure('BACKUP_CHECKSUM_MISMATCH');const cipher=createDecipheriv('aes-256-gcm',key,Buffer.from(sealed.nonce,'hex'));cipher.setAAD(Buffer.from(JSON.stringify(descriptor)));cipher.setAuthTag(Buffer.from(sealed.tag,'hex'));try{await pipeline(createReadStream(source),cipher,createWriteStream(destination,{flags:'wx',mode:0o600}));}catch{throw backupFailure('BACKUP_AUTHENTICATION_FAILED');}}

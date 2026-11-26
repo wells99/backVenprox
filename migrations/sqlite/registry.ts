@@ -1,3 +1,5 @@
+import { sqliteMaintenanceMigration } from './016-maintenance.js';
+import { sqliteQueryMigration } from './015-queries.js';
 import type { Migration } from '../../packages/infrastructure/persistence/src/shared.js';
 import { sqlitePublicationMigration } from './011-publication-protocol.js';
 import { sqliteLocalSyncMigration } from './012-local-sync.js';
@@ -41,4 +43,5 @@ export const sqliteMigrations: readonly Migration[] = [
   sqliteLocalSyncMigration,
   sqliteJobsMigration,
   sqliteSyncCoordinatorMigration,
-];
+  sqliteQueryMigration,
+sqliteMaintenanceMigration];

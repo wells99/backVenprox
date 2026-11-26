@@ -22,7 +22,7 @@ try {
   assert.equal((await fetch(`http://127.0.0.1:${port}/api/v1/auth/me`)).status,401);
   const spec=await(await fetch(`http://127.0.0.1:${port}/openapi.json`)).json() as {paths:object};
   assert.ok(Object.keys(spec.paths).includes('/api/v1/setup/activate'));
-  for(const path of ['/api/v1/products','/api/v1/categories','/api/v1/customers','/api/v1/settings','/api/v1/stock/balances','/api/v1/stock/movements','/api/v1/cash-sessions']){
+  for(const path of ['/api/v1/products','/api/v1/categories','/api/v1/customers','/api/v1/settings','/api/v1/stock/balances','/api/v1/stock/movements','/api/v1/cash-sessions','/api/v1/sales','/api/v1/admin/sync-status','/api/v1/admin/backups/status']){
     assert.ok(Object.keys(spec.paths).includes(path));assert.equal((await fetch(`http://127.0.0.1:${port}${path}`)).status,401);
   }
   for(const path of ['/api/v1/sync/push','/api/v1/sync/device-state','/api/v1/sync/receipts/{operation_id}','/api/v1/sync/changes','/api/v1/sync/snapshots','/api/v1/sync/snapshots/{id}','/api/v1/sync/snapshots/{id}/pages/{page}'])assert.ok(Object.keys(spec.paths).includes(path));
@@ -38,8 +38,10 @@ try {
   const business=once(local,'message',{signal:AbortSignal.timeout(10000)});local.send({type:'settings.get',request_id:'business-smoke'});
   assert.equal((await business)[0].error.code,'AUTHENTICATION_REQUIRED');
   for(const command of [{type:'cash.getCurrent'},{type:'sales.getCompletionResult',intention_id:'550e8400-e29b-41d4-a716-446655440000'}]){const result=once(local,'message',{signal:AbortSignal.timeout(10000)});local.send({...command,request_id:'financial-smoke'});assert.equal((await result)[0].error.code,'AUTHENTICATION_REQUIRED');}
-  for(const type of ['sync.getStatus','sync.requestRetry','sync.listConflicts']){const result=once(local,'message',{signal:AbortSignal.timeout(10000)});local.send({type,request_id:'sync-smoke'});assert.equal((await result)[0].error.code,'AUTHENTICATION_REQUIRED');}
+  for(const type of ['recovery.inspect','recovery.prepareCopy','sync.getStatus','sync.requestRetry','sync.listConflicts']){const result=once(local,'message',{signal:AbortSignal.timeout(10000)});local.send({type,request_id:'sync-smoke'});assert.equal((await result)[0].error.code,'AUTHENTICATION_REQUIRED');}
   const review=once(local,'message',{signal:AbortSignal.timeout(10000)});local.send({type:'sync.submitResolution',request_id:'resolution-smoke',intention_id:'550e8400-e29b-41d4-a716-446655440000',operation_id:'550e8400-e29b-41d4-a716-446655440000',expected_version:1,action:'confirm_original',reason:'Conferência de contrato sem sessão'});assert.equal((await review)[0].error.code,'AUTHENTICATION_REQUIRED');
+  for(const [type,query] of [['query.sales',{}],['query.summary',{from:'2026-11-25T00:00:00.000Z',to:'2026-11-26T00:00:00.000Z',time_zone:'America/Sao_Paulo'}],['query.reportEvents',{from:'2026-11-25T00:00:00.000Z',to:'2026-11-26T00:00:00.000Z',time_zone:'America/Sao_Paulo'}]] as const){const result=once(local,'message',{signal:AbortSignal.timeout(10000)});local.send({type,query,request_id:'query-smoke'});assert.equal((await result)[0].error.code,'AUTHENTICATION_REQUIRED');}
+  for(const path of ['/api/v1/reports/summary','/api/v1/reports/movements','/api/v1/sales/{id}','/api/v1/sales/{id}/reversals','/api/v1/cash-sessions/{id}/closure','/api/v1/admin/sync-status/{device_id}','/api/v1/sync/status'])assert.ok(Object.keys(spec.paths).includes(path));
   const status=once(local,'message',{signal:AbortSignal.timeout(10000)}); local.send({type:'device.getStatus',request_id:'device-smoke'});
   assert.equal((await status)[0].data.offline_enabled,false);
   api.disconnect(); local.send({type:'shutdown',request_id:'stop-smoke'});

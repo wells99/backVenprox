@@ -14,6 +14,13 @@ export const LocalDiagnosticsSchema = Type.Object({
 export const LocalErrorSchema = Type.Object({ type: Type.Literal('error'), error: ErrorSchema.properties.error }, { additionalProperties: false });
 export type LocalDiagnostics = Static<typeof LocalDiagnosticsSchema>;
 export const ipcCatalog = {
+  'query.reportEvents':{dto:'readCommands',permission:'sales.read',use_case:'ReadService.events',response:'QueryResponse'},
+  'catalog.get':{dto:'businessIpcCommands',permission:'catalog.read (+costs.read)',use_case:'CatalogService.get',response:'BusinessIpcResponse'},
+  'query.sales':{dto:'readCommands',permission:'sales.read',use_case:'ReadService.sales',response:'QueryResponse'},
+  'query.sale':{dto:'readCommands',permission:'sales.read (+costs.read)',use_case:'ReadService.sale',response:'QueryResponse'},
+  'query.reversals':{dto:'readCommands',permission:'sales.read',use_case:'ReadService.reversals',response:'QueryResponse'},
+  'query.closure':{dto:'readCommands',permission:'sales.read',use_case:'ReadService.closure',response:'QueryResponse'},
+  'query.summary':{dto:'readCommands',permission:'sales.read (+costs.read)',use_case:'ReadService.summary',response:'QueryResponse'},
   'sync.submitResolution':{dto:'localSyncCommands',permission:'online + recovery.manage + users.manage (+catalog.write)',use_case:'LocalSyncResolutionService.submit',response:'LocalSyncResponse'},
   'sync.getStatus':{dto:'localSyncCommands',permission:'catalog.read',use_case:'LocalSyncService.getStatus',response:'LocalSyncResponse'},
   'sync.requestRetry':{dto:'localSyncCommands',permission:'catalog.read',use_case:'LocalSyncService.requestRetry',response:'LocalSyncResponse'},
@@ -58,3 +65,6 @@ export const ipcCatalog = {
   'stock.adjustCount': { dto:'businessIpcCommands',permission:'stock.adjust',use_case:'StockService.adjustCount',response:'BusinessIpcResponse' },
   'stock.rebuildProjection': { dto:'businessIpcCommands',permission:'recovery.manage',use_case:'StockService.rebuild',response:'BusinessIpcResponse' },
 } as const;
+
+// B18: caminhos pertencem ao processo principal/configuração privada; renderer recebe apenas copy_id.
+export const recoveryIpcCatalog=[{command:'recovery.inspect',permission:'recovery.manage + users.manage'},{command:'recovery.prepareCopy',permission:'recovery.manage + users.manage'},{command:'recovery.validateCopy',permission:'recovery.manage + users.manage'},{command:'recovery.getReport',permission:'recovery.manage + users.manage'}] as const;

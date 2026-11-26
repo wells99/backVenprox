@@ -1,3 +1,8 @@
+import { readdir,readFile } from 'node:fs/promises';
+import { dirname,join } from 'node:path';
+import { RecoveryService } from '../../../packages/application/src/recovery.js';
+import { sqliteRecoveryPort } from '../../../packages/infrastructure/sqlite/src/recovery.js';
+import { recoveryCommands,RecoveryResponse } from '../../../packages/contracts/src/recovery.js';
 import { Value } from 'typebox/value';
 import { createGetLocalDiagnostics } from '../../../packages/application/src/get-local-diagnostics.js';
 import { LocalCommandSchema } from '../../../packages/contracts/src/system.js';
@@ -41,6 +46,9 @@ import { syncGateway,syncHttpClient } from '../../../packages/infrastructure/sec
 import { ResolutionResponse } from '../../../packages/contracts/src/sync-resolutions.js';
 import type { ResolutionResult } from '../../../packages/application/src/sync-resolution-ports.js';
 import { syncLoop } from '../../../packages/infrastructure/runtime/src/sync-loop.js';
+import { ReadService } from '../../../packages/application/src/read-service.js';
+import { sqliteReadUnitOfWork } from '../../../packages/infrastructure/sqlite/src/reads.js';
+import { readCommands,QueryResponse } from '../../../packages/contracts/src/reads.js';
 
 try {
   assertSupportedRuntime();
@@ -48,6 +56,7 @@ try {
   const logger = createLogger('local-service', config.logLevel);
   const sqlite = config.databasePath === ':memory:' ? openSqliteRuntime(config.databasePath)
     : await openLocalPersistence(config.databasePath, config.identity!);
+  const recovery='store'in sqlite&&sqlite.store instanceof SqliteStore?new RecoveryService(sqliteRecoveryPort(sqlite.store,process.env.LOCAL_BACKUP_DIRECTORY??join(dirname(config.databasePath),'backups'),process.env.RECOVERY_KEY_FILE,process.env.LOCAL_RECOVERY_DIRECTORY??join(dirname(config.databasePath),'recovery')),config.identity!.store_id,config.identity!.device_id,()=>systemClock.now().toISOString()):undefined;
   const getDiagnostics = createGetLocalDiagnostics(sqlite.repository, systemClock);
   let localAuth: LocalAuthService | undefined;
   let cache:LocalIdentityCache|undefined;
@@ -60,6 +69,7 @@ try {
   const cash=business?new CashService(business):undefined;
   const sales=business?new SalesService(business,async()=>String((await localAuth?.deviceStatus())?.code??'')):undefined;
   const reversal=business?new ReversalService(business):undefined,closure=business?new ClosureService(business):undefined;
+  const reads='store'in sqlite&&sqlite.store instanceof SqliteStore?new ReadService({unitOfWork:sqliteReadUnitOfWork(sqlite.store),storeId:config.identity!.store_id,deviceId:config.identity!.device_id,local:true,clock:systemClock}):undefined;
   if ('store' in sqlite && sqlite.store instanceof SqliteStore && process.env.AUTH_API_ORIGIN) {
     const ephemeral = generateAuthKeys();
     cache=sqliteAuthCache(sqlite.store, windowsSecretProtector(`venprox-auth-v1:${config.identity!.store_id}:${config.identity!.device_id}`));
@@ -72,6 +82,8 @@ try {
   const resolutions=coordinator&&request?new LocalSyncResolutionService(coordinator,async(device,id,command)=>(await request('/api/v1/admin/sync-resolutions',device,ResolutionResponse,command,true,{'idempotency-key':id})).data as ResolutionResult):undefined;
   if(coordinator)await coordinator.deps.unitOfWork.run((tx)=>tx.replica.state(config.syncEnabled?'starting':'disabled',null,systemClock.now().toISOString(),config.syncEnabled));
   const synchronization=config.syncEnabled&&coordinator?syncLoop(()=>coordinator.cycle(),config.syncPollMs,()=>logger.warn({event:'sync_cycle_unavailable'},'Ciclo de sincronização interrompido; pendências preservadas.')):undefined;
+  const backupDirectory=process.env.LOCAL_BACKUP_DIRECTORY??join(dirname(config.databasePath),'backups');
+  const backups=process.env.RECOVERY_KEY_FILE&&recovery?syncLoop(async()=>{let last=0;const entries=await readdir(backupDirectory).catch(()=>[] as string[]);for(const id of entries){if(!/^[a-f0-9-]{36}$/.test(id))continue;try{const m=JSON.parse(await readFile(join(backupDirectory,id,'manifest.json'),'utf8')) as {descriptor:{created_at:string}};last=Math.max(last,Date.parse(m.descriptor.created_at)||0);}catch{/* Incomplete copies do not prove a backup. */}}if(Date.now()-last>=config.backupIntervalHours*3600000)await recovery.port.prepare();},60000,()=>logger.warn({event:'backup_unavailable'},'Backup diário não confirmado; confira a configuração e o destino externo.')):undefined;
   // Mantém o processo dedicado vivo também na execução manual, sem abrir porta TCP.
   const keepAlive = setInterval(() => {}, 60_000);
   const shutdown = installShutdown({
@@ -81,6 +93,7 @@ try {
       clearInterval(keepAlive);
       process.off('message', onMessage);
       network.abort();
+      await backups?.stop();
       await synchronization?.stop();
       await coordinator?.exclusive(async()=>{});
       await sqlite.close();
@@ -88,6 +101,18 @@ try {
     },
   });
   async function onMessage(message: unknown) {
+    if(withinPayloadLimits(message)&&Value.Check(recoveryCommands,message)){
+      try{if(!localAuth||!recovery)throw new ApplicationError('RECOVERY_NOT_CONFIGURED','Manutenção não configurada.','unavailable');const {context}=await localAuth.getContext();
+        const data=message.type==='recovery.inspect'?await recovery.inspect(context):message.type==='recovery.prepareCopy'?await recovery.prepareCopy(context):message.type==='recovery.validateCopy'?await recovery.validateCopy(context,message.copy_id):await recovery.getReport(context,message.copy_id);
+        const result={type:'recovery.result',data,meta:{request_id:message.request_id}};if(!Value.Check(RecoveryResponse,result))throw new Error('INVALID_RECOVERY_OUTPUT');if(process.connected)process.send?.(result);
+      }catch(error){const response=error instanceof ApplicationError?errorResponse(error.code,error.message,message.request_id,[],error.retryable):errorResponse('RECOVERY_UNAVAILABLE','Cópia não liberada; preserve os arquivos e consulte suporte.',message.request_id);if(process.connected)process.send?.({type:'error',...response});}return;
+    }
+    if(withinPayloadLimits(message)&&Value.Check(readCommands,message)){
+      try{if(!localAuth||!reads)throw new ApplicationError('QUERY_NOT_CONFIGURED','Consultas não configuradas.','unavailable');const {context}=await localAuth.getContext();
+        const data=message.type==='query.sales'?await reads.sales(context,message.query):message.type==='query.sale'?await reads.sale(context,message.id):message.type==='query.reversals'?await reads.reversals(context,message.id):message.type==='query.closure'?await reads.closure(context,message.id):message.type==='query.reportEvents'?await reads.events(context,message.query):await reads.summary(context,message.query);
+        const result={type:'query.result',data,meta:{request_id:message.request_id}};if(!Value.Check(QueryResponse,result))throw new Error('INVALID_QUERY_OUTPUT');if(process.connected)process.send?.(result);
+      }catch(error){const response=error instanceof ApplicationError?errorResponse(error.code,error.message,message.request_id,[],error.retryable):errorResponse('QUERY_UNAVAILABLE','Consulta indisponível; os dados anteriores foram preservados.',message.request_id);if(process.connected)process.send?.({type:'error',...response});}return;
+    }
     if(withinPayloadLimits(message)&&Value.Check(localSyncCommands,message)){
       try{
         if(!localAuth||!localSync)throw new ApplicationError('SYNC_NOT_CONFIGURED','Sincronização local não configurada.','unavailable');
@@ -97,7 +122,7 @@ try {
           if(!resolutions)throw new ApplicationError('SYNC_NOT_CONFIGURED','Sincronização local não configurada.','unavailable');
           const {type:_type,request_id:_request,intention_id,...command}=message;data=await resolutions.submit(context,intention_id,command);synchronization?.wake();
         }else data=message.type==='sync.getStatus'?await localSync.getStatus(context):message.type==='sync.requestRetry'?await localSync.requestRetry(context):await localSync.listConflicts(context);
-        if(message.type==='sync.requestRetry')synchronization?.wake();
+        if(message.type==='sync.requestRetry'){if(synchronization)synchronization.wake();else if(coordinator)void coordinator.requestCycle().catch(()=>logger.warn({event:'manual_sync_unavailable'},'Envio manual não confirmado; pendências preservadas.'));}
         const result={type:'sync.result',data,meta:{request_id:message.request_id}};
         if(!Value.Check(LocalSyncResponse,result))throw new Error('INVALID_SYNC_IPC_OUTPUT');
         if(process.connected)process.send?.(result);

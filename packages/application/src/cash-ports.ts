@@ -5,7 +5,7 @@ export interface CashQuery {device_id?:string;after?:string;limit:number}
 export interface CashRepository {
   cashSession(id:string):Promise<CashSession|undefined>;currentCash(deviceId:string):Promise<CashSession|undefined>;
   cashSessions(query:CashQuery):Promise<CashSession[]>;insertCashSession(value:CashSession):Promise<void>;bumpCashSession(id:string):Promise<void>;
-  cashMovements(sessionId:string,query:{after?:string;origin_id?:string;limit:number}):Promise<CashMovement[]>;
+  cashMovements(sessionId:string,query:{after?:string;origin_id?:string;kind?:CashMovement['kind'];method?:PaymentMethod;limit:number}):Promise<CashMovement[]>;
   cashTotals(sessionId:string):Promise<Record<PaymentMethod,number>>;cashPending(sessionId:string):Promise<boolean>;
   appendCashMovement(value:CashMovement):Promise<void>;
 }

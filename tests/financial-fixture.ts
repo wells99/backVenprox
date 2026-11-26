@@ -19,11 +19,11 @@ import { mysqlMigrations } from '../migrations/mysql/registry.js';
 import { sqliteMigrations } from '../migrations/sqlite/registry.js';
 export const financialNow='2026-11-25T12:00:00.000Z';
 export const fails=(code:string)=>(error:unknown)=>error instanceof ApplicationError&&error.code===code;
-export async function financialFixture(engine:'sqlite'|'mysql',stage:'b07'|'b08'|'b08_ipc'|'b09'|'b10'|'b11'|'b12'|'b13'|'b13_load'|'b12_final'|'b12_ipc',version?:number){
+export async function financialFixture(engine:'sqlite'|'mysql',stage:'b07'|'b08'|'b08_ipc'|'b09'|'b10'|'b11'|'b12'|'b13'|'b13_load'|'b12_final'|'b12_ipc'|'b14'|'b14_ui'|'b18'|'b14_ui_fix',version?:number){
   const directory=await mkdtemp(join(tmpdir(),`venprox-${stage}-`)),identity={store_id:randomUUID(),device_id:randomUUID()};
   const database=`venprox_${stage}_test`;
   const options:ConnectionOptions={host:'127.0.0.1',port:3308,user:'venprox_migration',password:process.env.MYSQL_PASSWORD!,database};
-  async function clear(){assert.ok(['venprox_b07_test','venprox_b08_test','venprox_b08_ipc_test','venprox_b09_test','venprox_b10_test','venprox_b11_test','venprox_b12_test','venprox_b13_test','venprox_b13_load_test','venprox_b12_final_test','venprox_b12_ipc_test'].includes(database));const c=await createConnection(options);try{for(const table of [...new Set(mysqlMigrations.flatMap((m)=>m.steps).filter((s)=>s.sql.startsWith('CREATE TABLE')).map((s)=>s.table))].reverse())await c.query(`DROP TABLE IF EXISTS ${table}`);await c.query('DROP TABLE IF EXISTS schema_migrations');}finally{await c.end();}}
+  async function clear(){assert.ok(['venprox_b07_test','venprox_b08_test','venprox_b08_ipc_test','venprox_b09_test','venprox_b10_test','venprox_b11_test','venprox_b12_test','venprox_b13_test','venprox_b13_load_test','venprox_b12_final_test','venprox_b12_ipc_test','venprox_b14_test','venprox_b14_ui_test','venprox_b18_test','venprox_b14_ui_fix_test'].includes(database));const c=await createConnection(options);try{for(const table of [...new Set(mysqlMigrations.flatMap((m)=>m.steps).filter((s)=>s.sql.startsWith('CREATE TABLE')).map((s)=>s.table))].reverse())await c.query(`DROP TABLE IF EXISTS ${table}`);await c.query('DROP TABLE IF EXISTS schema_migrations');}finally{await c.end();}}
   if(engine==='mysql'){assert.equal(process.env.MYSQL_HOST,'127.0.0.1');assert.equal(process.env.MYSQL_PORT,'3308');await clear();}
   const store=engine==='sqlite'?SqliteStore.open(join(directory,'terminal.db'),identity,true):await MysqlStore.connect(options,{store_id:identity.store_id});
   await store.migrate((engine==='sqlite'?sqliteMigrations:mysqlMigrations).slice(0,version));await store.provisionIdentity();

@@ -1,0 +1,6 @@
+import type { Migration } from '../../packages/infrastructure/persistence/src/shared.js';
+import { mysqlSalesMigration } from './008-sales.js';
+import { mysqlReversalMigration } from './009-reversals.js';
+import { mysqlCashMigration } from './007-cash.js';
+const definitions=[['sales','sales_period','store_id,local_commit_at,id'],['sale_items','sale_item_lookup','store_id,sale_id'],['sale_reversals','reversal_period','store_id,occurred_at,id'],['cash_movements','cash_period','store_id,occurred_at,kind,method']] as const;
+export const mysqlQueryMigration:Migration={version:15,steps:[{table:'server_terminal_reports',columns:['store_id','device_id','reported_at','status_json'],sql:`CREATE TABLE IF NOT EXISTS server_terminal_reports(store_id VARCHAR(36) NOT NULL,device_id VARCHAR(36) NOT NULL,reported_at VARCHAR(30) NOT NULL,status_json TEXT NOT NULL CHECK(json_valid(status_json)),PRIMARY KEY(store_id,device_id),FOREIGN KEY(store_id,device_id) REFERENCES auth_devices(store_id,id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin`},...definitions.map(([table,index,columns])=>({table,columns:[...mysqlSalesMigration.steps,...mysqlReversalMigration.steps,...mysqlCashMigration.steps].find((s)=>s.table===table)!.columns,sql:`CREATE INDEX ${index} ON ${table}(${columns})`}))]};

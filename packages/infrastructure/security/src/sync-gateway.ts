@@ -8,6 +8,7 @@ import type { SnapshotManifest,SnapshotPage } from '../../../application/src/pub
 import type { SyncReceipt } from '../../../application/src/sync-ports.js';
 import { ApplicationError } from '../../../application/src/application-error.js';
 import type { TSchema } from '../../../contracts/src/common.js';
+import { ReportAcceptedResponse } from '../../../contracts/src/reads.js';
 export function syncHttpClient(origin:string,signal?:AbortSignal){
   const url=new URL(origin);if(url.origin!==origin||url.protocol!=='https:'&&!(url.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(url.hostname)))throw new Error('INVALID_SYNC_ORIGIN');
   return async(path:string,device:PairedDevice,schema:TSchema,body?:unknown,session=false,headers:Record<string,string>={})=>{
@@ -26,6 +27,7 @@ export function syncHttpClient(origin:string,signal?:AbortSignal){
 export function syncGateway(origin:string,signal?:AbortSignal):SyncGateway{
   const request=syncHttpClient(origin,signal);
   return {
+    report:async(device,value)=>{await request('/api/v1/sync/status',device,ReportAcceptedResponse,value);},
     compatible:async(device)=>{const compatibility=await request('/api/v1/compatibility',device,CompatibilitySchema);const c=compatibility.data as {supported_protocol_versions:number[];minimum_app_version:string};if(!c.supported_protocol_versions.includes(1)||!/^0\.1\.[0-9]+$/.test(c.minimum_app_version)||c.minimum_app_version!=='0.1.0')throw new ApplicationError('SYNC_PROTOCOL_UPGRADE_REQUIRED','Protocolo ou aplicativo incompatível.','conflict');return (await request('/api/v1/sync/device-state',device,DeviceStateResponse)).data as Awaited<ReturnType<SyncGateway['compatible']>>;},
     changes:async(device,after)=>(await request(`/api/v1/sync/changes?after=${encodeURIComponent(after)}&limit=50`,device,ChangesResponse)).data as ChangesPage,
     push:async(device,value)=>{const data=(await request('/api/v1/sync/push',device,PushResponse,{items:[value]})).data as {items:SyncReceipt[]};if(data.items.length!==1)throw new ApplicationError('SYNC_RECEIPT_INVALID','Recibo individual ausente.','conflict');return data.items[0]!;},

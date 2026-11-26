@@ -1,3 +1,5 @@
+import { BackupStatusService } from '../../../packages/application/src/backup-status.js';
+import { mysqlMaintenance } from '../../../packages/infrastructure/mysql/src/maintenance.js';
 import { createCompatibilityPolicy } from '../../../packages/domain/src/compatibility.js';
 import { createGetCompatibility } from '../../../packages/application/src/get-compatibility.js';
 import { ConfigurationError, loadApiConfig } from '../../../packages/infrastructure/runtime/src/config.js';
@@ -23,6 +25,8 @@ import { DownloadService } from '../../../packages/application/src/download-serv
 import { JobService } from '../../../packages/application/src/job-service.js';
 import { mysqlJobUnitOfWork } from '../../../packages/infrastructure/mysql/src/jobs.js';
 import { SyncResolutionService } from '../../../packages/application/src/sync-resolution-service.js';
+import { ReadService } from '../../../packages/application/src/read-service.js';
+import { mysqlReadUnitOfWork } from '../../../packages/infrastructure/mysql/src/reads.js';
 
 try {
   assertSupportedRuntime();
@@ -40,10 +44,12 @@ try {
     auth = { service: new AuthService({ unitOfWork: authUnitOfWork(authStore), storeId: settings.storeId,
       crypto: createAuthCrypto(settings.privateKey, settings.fingerprintKey), clock: systemClock, ids: uuidGenerator }),
       origin: settings.origin, secureCookies: settings.secureCookies };
+    auth.backups=new BackupStatusService(settings.storeId,mysqlMaintenance(authStore).lastBackup,()=>systemClock.now().toISOString());
     const business={unitOfWork:mysqlBusinessUnitOfWork(authStore),storeId:settings.storeId,deviceId:uuidGenerator.generate(),local:false,
       clock:systemClock,ids:uuidGenerator,hash:businessHash,remoteWritesEnabled};
     auth.business={catalog:new CatalogService(business),stock:new StockService(business),cash:new CashService(business)};
     const syncCrypto=createAuthCrypto(settings.privateKey,settings.fingerprintKey);
+    auth.reads=new ReadService({unitOfWork:mysqlReadUnitOfWork(authStore),storeId:settings.storeId,local:false,clock:systemClock,digest:syncCrypto.digest});
     const syncService=new SyncService({unitOfWork:mysqlSyncUnitOfWork(authStore),storeId:settings.storeId,clock:systemClock,ids:uuidGenerator,digest:syncCrypto.digest,hashEnvelope:syncEnvelopeHash,hashValue:syncHashValue,validatePayload:validateSyncPayload,verifyOriginSignature:(signature)=>syncCrypto.verifyGrant(signature,syncCrypto.publicKey()),publication:atomicSyncPublication,writesEnabled:true});
     auth.sync=syncService;
     auth.resolutions=new SyncResolutionService({...syncService.deps,unitOfWork:mysqlSyncUnitOfWork(authStore)});

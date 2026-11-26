@@ -6,9 +6,12 @@ export class SyncCoordinator {
   private active:Promise<void>|undefined;
   readonly outbox:LocalSyncService;
   constructor(readonly deps:SyncCoordinatorDependencies){this.outbox=new LocalSyncService(deps);}
-  cycle():Promise<void>{if(this.active)return this.active;const pending=this.work().finally(()=>{if(this.active===pending)this.active=undefined;});this.active=pending;return pending;}
+  // An explicit request made during a running cycle must get a fresh contact
+  // after that cycle finishes, including its telemetry. Polling may coalesce.
+  requestCycle():Promise<void>{return this.active?this.active.then(()=>this.cycle()):this.cycle();}
+  cycle():Promise<void>{if(this.active)return this.active;const pending=this.work().then(async()=>{if(!this.deps.gateway.report)return;try{const device=await this.deps.device();if(device){const status=await this.deps.unitOfWork.run((tx)=>tx.sync.status());await this.deps.gateway.report(device,{download_cursor:status.download_cursor,pending:status.pending,in_flight:status.in_flight,acknowledged:status.acknowledged,conflicts:status.conflicts,oldest_pending_at:status.oldest_pending_at,last_receipt_at:status.last_receipt_at,phase:status.phase,last_code:status.last_code??null,automatic_sync_enabled:status.automatic_sync_enabled,schema_version:16,protocol_version:1});}}catch{ /* Telemetry never acknowledges financial operations. */ }}).finally(()=>{if(this.active===pending)this.active=undefined;});this.active=pending;return pending;}
   exclusive<T>(work:()=>Promise<T>):Promise<T>{const result=(this.active??Promise.resolve()).then(work),pending=result.then(()=>{},()=>{});this.active=pending;void pending.then(()=>{if(this.active===pending)this.active=undefined;});return result;}
-  private state(value:string,code:string|null=null){return this.deps.unitOfWork.run((tx)=>tx.replica.state(value,code,this.deps.clock.now().toISOString(),true));}
+  private state(value:string,code:string|null=null){return this.deps.unitOfWork.run((tx)=>tx.replica.runtime().then(runtime=>tx.replica.state(value,code,this.deps.clock.now().toISOString(),runtime.enabled)));}
   private async bootstrap(device:PairedDevice){
     let manifest=await this.deps.unitOfWork.run((tx)=>tx.replica.staged());
     if(manifest){const current=await this.deps.gateway.manifest(device,manifest.id);if(current.state==='expired')manifest=undefined;else if(current.id!==manifest.id||current.store_id!==manifest.store_id||current.device_id!==manifest.device_id||current.checksum!==manifest.checksum||current.cut_cursor!==manifest.cut_cursor)throw new ApplicationError('SYNC_SNAPSHOT_INCOMPATIBLE','Manifesto alterado durante a instalação.','conflict');}

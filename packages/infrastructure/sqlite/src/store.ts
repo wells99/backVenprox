@@ -23,6 +23,8 @@ export class SqliteStore {
     if (!isAbsolute(path) || path.startsWith('\\\\') || path.startsWith('//') || /(?:^|[\\/])OneDrive(?:[\\/]|$)/i.test(path) || absolute.startsWith(`${resolve('.')}\\`)) {
       throw new PersistenceError('DATABASE_PERMISSION');
     }
+    if (existsSync(`${absolute}.maintenance.lock`)) throw new PersistenceError('DATABASE_BUSY',true);
+    if (!maintenance && existsSync(`${absolute}.retired`)) throw new PersistenceError('IDENTITY_MISMATCH');
     if (!existsSync(absolute) && !provision) throw new PersistenceError('DATABASE_MISSING');
     if (existsSync(absolute) && provision) throw new PersistenceError('UNIQUE_CONFLICT');
     if (provision) mkdirSync(dirname(absolute), { recursive: true });
@@ -37,6 +39,8 @@ export class SqliteStore {
     let db: Database.Database | undefined;
     try {
       fd = openSync(lockPath, 'wx', 0o600); writeFileSync(fd, String(process.pid));
+      if (existsSync(`${absolute}.maintenance.lock`)) throw new PersistenceError('DATABASE_BUSY',true);
+      if (!maintenance && (existsSync(`${absolute}.retired`)||existsSync(`${resolvedPath}.retired`))) throw new PersistenceError('IDENTITY_MISMATCH');
       db = new Database(resolvedPath, { fileMustExist: !provision, timeout: 1000 });
       db.pragma('foreign_keys=ON'); db.pragma('journal_mode=WAL'); db.pragma('synchronous=FULL');
       const version = (db.prepare('SELECT sqlite_version() AS v').get() as { v: string }).v;
@@ -117,6 +121,7 @@ export class SqliteStore {
         sequences: { next: async (deviceId) => {
           guard(); assertUuid(deviceId);
           if (deviceId !== this.identity.device_id) throw new PersistenceError('IDENTITY_MISMATCH');
+          const held=db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='maintenance_runs'").get()&&db.prepare("SELECT 1 FROM maintenance_runs WHERE store_id=? AND kind='recovery' AND status='held' LIMIT 1").get(this.identity.store_id);if(held)throw new ApplicationError('RECOVERY_RECONCILIATION_REQUIRED','A cópia restaurada exige reconciliação e retirada do terminal original antes de novas operações.','conflict');
           const safety=db.prepare('SELECT state FROM sync_runtime WHERE store_id=? AND device_id=?').get(this.identity.store_id,deviceId) as {state:string}|undefined;
           if(safety?.state==='recovery_required')throw new ApplicationError('SYNC_RECOVERY_REQUIRED','A identidade exige recuperação antes de gravar novas operações.','conflict');
           db.prepare('INSERT INTO device_sequences VALUES(?,?,0) ON CONFLICT DO NOTHING').run(this.identity.store_id, deviceId);

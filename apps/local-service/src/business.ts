@@ -25,6 +25,7 @@ export async function executeBusiness(message:BusinessIpcCommand,context:Busines
     case 'cash.registerSupply':return cash!.register(context,message.intention_id,'supply',message.input);
     case 'cash.registerWithdrawal':return cash!.register(context,message.intention_id,'withdrawal',message.input);
     case 'catalog.search':return catalog.list(context,message.entity_type,message.query);
+    case 'catalog.get':return catalog.get(context,message.entity_type,message.id);
     case 'catalog.getPending':return catalog.pending(context,message.entity_type);
     case 'products.proposeCreate':return catalog.createProduct(context,message.intention_id,message.input);
     case 'products.proposeUpdate':{const {expected_version,...patch}=message.input;return catalog.updateProduct(context,message.id,message.intention_id,expected_version,patch);}

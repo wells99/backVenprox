@@ -61,6 +61,7 @@ export const businessIpcCommands=Type.Union([
   salesCommands,
   reversalCommands,
   command('catalog.search',{entity_type:EntityKind,query:NativeListQuery}),
+  command('catalog.get',{entity_type:EntityKind,id:UuidSchema}),
   command('catalog.getPending',{entity_type:Type.Optional(Type.Union([EntityKind,Type.Literal('settings')]))}),
   command('products.proposeCreate',{...intention,input:ProductInput}),
   command('products.proposeUpdate',{...intention,id:UuidSchema,input:ProductUpdate}),
@@ -88,7 +89,7 @@ export type CatalogListQuery=Static<typeof NativeListQuery>;
 export type StockMovementQuery=Static<typeof NativeMovementQuery>;
 const IpcSettings=Type.Object({store:StoreSettings,terminal:Type.Optional(TerminalSettings)},closed);
 export const BusinessIpcResponse=Type.Object({type:Type.Literal('business.result'),data:Type.Union([
-  CashResult,CashAdjustmentResult,CashPage,CashMovements,
+  Entity,StoreSettings,CashResult,CashAdjustmentResult,CashPage,CashMovements,
   DraftResult,CompletionResult,
   ReversalResult,ClosureResult,ClosurePreview,
   Type.Object({items:Type.Array(Entity,{maxItems:100})},closed),Type.Object({items:Type.Array(BalanceItem,{maxItems:100})},closed),Type.Object({items:Type.Array(Movement,{maxItems:100})},closed),Proposal,IpcSettings,TerminalSettings,

@@ -1,0 +1,17 @@
+{
+  "format": 1,
+  "pilot_authorized": false,
+  "build_id": "PREENCHER_COM_BUILD_VERIFICADO",
+  "backup_interval_hours": 24,
+  "offline_login_enabled": false,
+  "deferred_modules": ["B15", "B16", "B17"],
+  "hosting_node_https_workers_verified": false,
+  "runtime_sql_without_ddl_verified": false,
+  "external_backup_destination_verified": false,
+  "backup_key_escrow_verified": false,
+  "restore_time_target_minutes": null,
+  "restore_time_measured_minutes": null,
+  "support_responsible": null,
+  "shop_hardware_verified": false,
+  "owner_pilot_acceptance": null
+}

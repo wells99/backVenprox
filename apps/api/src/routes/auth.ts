@@ -1,3 +1,5 @@
+import type { BackupStatusService } from '../../../../packages/application/src/backup-status.js';
+import { BackupStatusResponse } from '../../../../packages/contracts/src/recovery.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import cookie from '@fastify/cookie';
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
@@ -10,9 +12,11 @@ import { registerSyncRoutes, type SyncHttpService } from './sync.js';
 import { registerDownloadRoutes, type DownloadHttpService } from './download.js';
 import { registerJobRoutes, type JobHttpService } from './jobs.js';
 import { registerSyncResolutionRoutes,type ResolutionHttpService } from './sync-resolutions.js';
+import { registerReadRoutes,type ReadHttpService } from './reads.js';
 
 export type AuthHttpService = Pick<AuthService, keyof AuthService>;
-export interface AuthHttpOptions { service: AuthHttpService; origin: string; secureCookies: boolean; business?:BusinessHttpServices;sync?:SyncHttpService;download?:DownloadHttpService;jobs?:JobHttpService;resolutions?:ResolutionHttpService }
+export interface AuthHttpOptions {
+  backups?:Pick<BackupStatusService,'status'>; service: AuthHttpService; origin: string; secureCookies: boolean; business?:BusinessHttpServices;sync?:SyncHttpService;download?:DownloadHttpService;jobs?:JobHttpService;resolutions?:ResolutionHttpService;reads?:ReadHttpService }
 const security = [{ sessionCookie: [] }];
 const errors = { 400: ErrorSchema, 401: ErrorSchema, 403: ErrorSchema, 404: ErrorSchema, 409: ErrorSchema, 413: ErrorSchema, 422: ErrorSchema, 429: ErrorSchema, 500: ErrorSchema, 503: ErrorSchema };
 export async function registerAuthRoutes(scope: FastifyInstance, options: AuthHttpOptions) {
@@ -79,4 +83,6 @@ export async function registerAuthRoutes(scope: FastifyInstance, options: AuthHt
   if(options.download)registerDownloadRoutes(scope,options.download,(request)=>service.authenticate(access(request)),mutation);
   if(options.jobs)registerJobRoutes(scope,options.jobs,(request)=>service.authenticate(access(request)),mutation);
   if(options.resolutions)registerSyncResolutionRoutes(scope,options.resolutions,(request)=>service.authenticate(access(request)),mutation);
+  if(options.backups)router.get('/api/v1/admin/backups/status',{schema:{...base('backupStatus','recovery.manage/users.manage; último backup conhecido, sem caminhos/chaves; cópia externa desconhecida até prova operacional.'),response:{...errors,200:BackupStatusResponse}}},async(request)=>wrap(await options.backups!.status(await service.authenticate(access(request))),request));
+  if(options.reads)registerReadRoutes(scope,options.reads,(request)=>service.authenticate(access(request)));
 }

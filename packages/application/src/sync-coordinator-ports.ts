@@ -3,6 +3,7 @@ import type { LocalSyncDependencies,LocalSyncTransaction } from './local-sync-po
 import type { PublishedChange,SnapshotManifest,SnapshotPage } from './publication-ports.js';
 import type { SyncEnvelope,SyncReceipt } from './sync-ports.js';
 import type { UnitOfWork } from './ports.js';
+import type { TerminalReport } from './read-ports.js';
 export interface ChangesPage {items:PublishedChange[];next_cursor:string;retention_floor:string;has_more:boolean;protocol_version:1;event_version:1|2}
 export interface SyncRuntime {initialized:boolean;cursor:string;local_seq:string;baseline_seq:string;state:string;last_code:string|null;enabled:boolean}
 export interface SyncReplica {
@@ -12,6 +13,7 @@ export interface SyncReplica {
 }
 export interface CoordinatorTransaction extends LocalSyncTransaction {replica:SyncReplica}
 export interface SyncGateway {
+  report?(device:PairedDevice,value:TerminalReport):Promise<void>;
   compatible(device:PairedDevice):Promise<{received_seq:string;store_id:string;device_id:string;sync_enabled:boolean}>;
   changes(device:PairedDevice,after:string):Promise<ChangesPage>;push(device:PairedDevice,value:SyncEnvelope):Promise<SyncReceipt>;receipt(device:PairedDevice,id:string):Promise<SyncReceipt>;
   snapshot(device:PairedDevice):Promise<SnapshotManifest>;manifest(device:PairedDevice,id:string):Promise<SnapshotManifest>;page(device:PairedDevice,id:string,page:number):Promise<SnapshotPage>;

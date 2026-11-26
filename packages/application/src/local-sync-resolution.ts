@@ -13,7 +13,7 @@ export class LocalSyncResolutionService {
       if((await deps.unitOfWork.run((tx)=>tx.replica.runtime())).state==='recovery_required')throw new ApplicationError('SYNC_RECOVERY_REQUIRED','Recupere a identidade antes de revisar a fila.','conflict');
       const device=await deps.device();if(!device?.session)throw new ApplicationError('AUTHENTICATION_REQUIRED','Renove a autenticação online.','unauthenticated');
       const delivery=await deps.unitOfWork.run((tx)=>tx.sync.delivery(command.operation_id));
-      if(!delivery)throw new ApplicationError('SYNC_RESOLUTION_LOCAL_MISSING','Consulte a pendência antes de revisar.','conflict');
+      if(!delivery){const prepared=await outbox.prepareNext(null,true);if(prepared?.operation_id!==command.operation_id||!prepared.envelope_json)throw new ApplicationError('SYNC_RESOLUTION_LOCAL_MISSING','Envie ou resolva as pendências anteriores antes de confirmar este cadastro.','conflict');}
       try{await deps.gateway.receipt(device,command.operation_id);}catch(error){
         if(!(error instanceof ApplicationError&&error.kind==='not_found'))throw error;
         const row=await outbox.prepareNext(null,true);

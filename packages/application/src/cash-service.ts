@@ -23,9 +23,9 @@ export class CashService extends BusinessBase {
   }
   private async readable(tx:BusinessTransaction,id:string){const row=await tx.business.cashSession(id);if(!row||this.deps.local&&row.device_id!==this.deps.deviceId)throw new ApplicationError('CASH_SESSION_NOT_FOUND','Caixa não encontrado.','not_found');return row;}
   async get(context:BusinessContext,id:string){this.authorize(context,'sales.read');return this.transaction(async(tx)=>({session:await this.view(tx,await this.readable(tx,id)),scope:this.scope(),as_of:this.now()}));}
-  async movements(context:BusinessContext,id:string,query:{after?:string;limit?:number;origin_id?:string}={}){
+  async movements(context:BusinessContext,id:string,query:{after?:string;limit?:number;origin_id?:string;kind?:CashMovement['kind'];method?:PaymentMethod}={}){
     this.authorize(context,'sales.read');const page=this.pageQuery(query);
-    return this.transaction(async(tx)=>{await this.readable(tx,id);const rows=await tx.business.cashMovements(id,{...page,...(query.origin_id?{origin_id:query.origin_id}:{})}),items=rows.slice(0,page.limit);
+    return this.transaction(async(tx)=>{await this.readable(tx,id);const rows=await tx.business.cashMovements(id,{...page,...(query.origin_id?{origin_id:query.origin_id}:{}),...(query.kind?{kind:query.kind}:{}),...(query.method?{method:query.method}:{})}),items=rows.slice(0,page.limit);
       return {items:items.map(({store_id:_store,...value})=>value),next_cursor:rows.length>page.limit?idCursor(items.at(-1)!.id):null,scope:this.scope(),as_of:this.now()};});
   }
   async open(context:BusinessContext,intention:string,input:{opening_cents:number;business_date:string;time_zone:string}){

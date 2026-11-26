@@ -1,0 +1,9 @@
+{
+  "format": 1,
+  "batch_id": "550e8400-e29b-41d4-a716-446655440000",
+  "source": "EXEMPLO-NAO-IMPORTAR-EM-PRODUCAO",
+  "rows": [
+    {"kind":"product","source_record_id":"000001","data":{"name":"Produto de exemplo","internal_code":"000001","unit":"unit","price_cents":100,"cost_cents":null,"barcodes":["00000123"]}},
+    {"kind":"customer","source_record_id":"000002","data":{"name":"Cliente de exemplo","phone":null,"email":null}}
+  ]
+}

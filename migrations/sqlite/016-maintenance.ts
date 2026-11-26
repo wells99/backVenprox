@@ -1,0 +1,2 @@
+import type { Migration } from '../../packages/infrastructure/persistence/src/shared.js';
+export const sqliteMaintenanceMigration:Migration={version:16,steps:[{table:'maintenance_runs',columns:['id','store_id','kind','input_hash','status','report_json','created_at'],sql:"CREATE TABLE IF NOT EXISTS maintenance_runs(id TEXT PRIMARY KEY NOT NULL,store_id TEXT NOT NULL,kind TEXT NOT NULL,input_hash TEXT NOT NULL,status TEXT NOT NULL,report_json TEXT NOT NULL CHECK(json_valid(report_json)),created_at TEXT NOT NULL,FOREIGN KEY(store_id) REFERENCES instance_identity(store_id))"}]};

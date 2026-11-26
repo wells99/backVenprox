@@ -1,3 +1,5 @@
+import { mysqlMaintenanceMigration } from './016-maintenance.js';
+import { mysqlQueryMigration } from './015-queries.js';
 import type { Migration } from '../../packages/infrastructure/persistence/src/shared.js';
 import { mysqlPublicationMigration } from './011-publication.js';
 import { mysqlLocalSyncMigration } from './012-local-sync-protocol.js';
@@ -43,4 +45,5 @@ export const mysqlMigrations: readonly Migration[] = [
   mysqlLocalSyncMigration,
   mysqlJobsMigration,
   mysqlSyncResolutionsMigration,
-];
+  mysqlQueryMigration,
+mysqlMaintenanceMigration];

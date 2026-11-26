@@ -5,7 +5,8 @@ const signed=Type.Integer({minimum:-Number.MAX_SAFE_INTEGER,maximum:Number.MAX_S
 export const CashSession=Type.Object({id:UuidSchema,device_id:UuidSchema,operator_id:UuidSchema,opened_at:UtcInstantSchema,business_date:BusinessDateSchema,time_zone:Type.String(),opening_cents:CentsSchema,status:Type.Union([Type.Literal('open'),Type.Literal('closed')]),version:Type.Integer({minimum:1}),expected_by_method:Type.Object({cash:signed,credit:signed,debit:signed,pix:signed},closed),pending_sync:Type.Boolean()},closed);
 export const CashMovement=Type.Object({id:UuidSchema,session_id:UuidSchema,device_id:UuidSchema,operator_id:UuidSchema,operation_id:UuidSchema,origin_id:UuidSchema,component_id:UuidSchema,kind:Type.Union(['opening','supply','withdrawal','sale','refund','credit_receipt'].map((v)=>Type.Literal(v))),method:Type.Union(['cash','credit','debit','pix'].map((v)=>Type.Literal(v))),amount_cents:signed,reason:Type.String(),occurred_at:UtcInstantSchema},closed);
 export const CashListQuery=Type.Object({device_id:Type.Optional(UuidSchema),after:Type.Optional(DecimalCursorSchema),limit:Type.Optional(Type.String({pattern:'^([1-9][0-9]?|100)$'}))},closed);
-export const CashMovementQuery=Type.Object({after:CashListQuery.properties.after,limit:CashListQuery.properties.limit,origin_id:Type.Optional(UuidSchema)},closed);
+const movementFilters={kind:Type.Optional(CashMovement.properties.kind),method:Type.Optional(CashMovement.properties.method)};
+export const CashMovementQuery=Type.Object({after:CashListQuery.properties.after,limit:CashListQuery.properties.limit,origin_id:Type.Optional(UuidSchema),...movementFilters},closed);
 const nativePage={after:CashListQuery.properties.after,limit:Type.Optional(Type.Integer({minimum:1,maximum:100}))};
 const open=Type.Object({opening_cents:CentsSchema,business_date:BusinessDateSchema,time_zone:Type.String({minLength:1,maxLength:100})},closed);
 const adjustment=Type.Object({session_id:UuidSchema,amount_cents:Type.Integer({minimum:1,maximum:Number.MAX_SAFE_INTEGER}),reason:Type.String({minLength:1,maxLength:2000})},closed);
@@ -13,7 +14,7 @@ export const cashCommands=Type.Union([
   Type.Object({type:Type.Literal('cash.getCurrent'),request_id:RequestIdSchema},closed),
   Type.Object({type:Type.Literal('cash.listSessions'),request_id:RequestIdSchema,query:Type.Object(nativePage,closed)},closed),
   Type.Object({type:Type.Literal('cash.getSession'),request_id:RequestIdSchema,id:UuidSchema},closed),
-  Type.Object({type:Type.Literal('cash.getMovements'),request_id:RequestIdSchema,id:UuidSchema,query:Type.Object({...nativePage,origin_id:Type.Optional(UuidSchema)},closed)},closed),
+  Type.Object({type:Type.Literal('cash.getMovements'),request_id:RequestIdSchema,id:UuidSchema,query:Type.Object({...nativePage,origin_id:Type.Optional(UuidSchema),...movementFilters},closed)},closed),
   Type.Object({type:Type.Literal('cash.open'),request_id:RequestIdSchema,intention_id:UuidSchema,input:open},closed),
   Type.Object({type:Type.Literal('cash.registerSupply'),request_id:RequestIdSchema,intention_id:UuidSchema,input:adjustment},closed),
   Type.Object({type:Type.Literal('cash.registerWithdrawal'),request_id:RequestIdSchema,intention_id:UuidSchema,input:adjustment},closed),

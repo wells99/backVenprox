@@ -13,7 +13,7 @@ export function cashRepository(sql:BusinessSql,storeId:string):CashRepository {
     cashSessions:(q)=>rows<CashSession>('cash_sessions',`${q.device_id?'AND device_id=? ':''}${q.after?'AND id>? ':''}ORDER BY id LIMIT ?`,[...(q.device_id?[q.device_id]:[]),...(q.after?[q.after]:[]),q.limit+1]),
     insertCashSession:(value)=>insert('cash_sessions',{...value,open_device:value.status==='open'?value.device_id:null} as CashSession),
     bumpCashSession:async(id)=>{sql.active();await sql.run('UPDATE cash_sessions SET version=version+1 WHERE store_id=? AND id=?',[storeId,id]);},
-    cashMovements:(id,q)=>rows<CashMovement>('cash_movements',`AND session_id=? ${q.after?'AND id>? ':''}${q.origin_id?'AND origin_id=? ':''}ORDER BY id LIMIT ?`,[id,...(q.after?[q.after]:[]),...(q.origin_id?[q.origin_id]:[]),q.limit+1]),
+    cashMovements:(id,q)=>rows<CashMovement>('cash_movements',`AND session_id=? ${q.after?'AND id>? ':''}${q.origin_id?'AND origin_id=? ':''}${q.kind?'AND kind=? ':''}${q.method?'AND method=? ':''}ORDER BY id LIMIT ?`,[id,...(q.after?[q.after]:[]),...(q.origin_id?[q.origin_id]:[]),...(q.kind?[q.kind]:[]),...(q.method?[q.method]:[]),q.limit+1]),
     appendCashMovement:(value)=>insert('cash_movements',value),
     cashTotals:async(id)=>{
       sql.active();const totals={cash:0n,credit:0n,debit:0n,pix:0n};

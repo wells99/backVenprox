@@ -22,7 +22,10 @@ export function localSyncRepository(db:Database.Database,identity:DatabaseIdenti
       },
       acknowledge:async(id,at)=>{run("UPDATE operation_outbox SET state='acknowledged' WHERE store_id=? AND device_id=? AND operation_id=?",[store_id,device_id,id]);run('UPDATE sync_state SET last_contact_at=?,last_receipt_at=? WHERE store_id=? AND device_id=?',[at,at,store_id,device_id]);},
       contact:async(at,receipt=false)=>{run('UPDATE sync_state SET last_contact_at=?,last_receipt_at=CASE WHEN ?=1 THEN ? ELSE last_receipt_at END WHERE store_id=? AND device_id=?',[at,Number(receipt),at,store_id,device_id]);},
-      requestRetry:async(at)=>{run('UPDATE sync_state SET retry_requested_at=? WHERE store_id=? AND device_id=?',[at,store_id,device_id]);run("UPDATE sync_outbox SET next_attempt_at=? WHERE store_id=? AND device_id=? AND state='retry_wait'",[at,store_id,device_id]);},
+      requestRetry:async(at)=>{run('UPDATE sync_state SET retry_requested_at=? WHERE store_id=? AND device_id=?',[at,store_id,device_id]);run("UPDATE sync_outbox SET next_attempt_at=? WHERE store_id=? AND device_id=? AND state='retry_wait'",[at,store_id,device_id]);
+        // A queued attempt must not report the previous attempt's failure.
+        // Recovery remains a durable barrier that a retry cannot clear.
+        run("UPDATE sync_runtime SET state=CASE WHEN state='recovery_required' THEN state ELSE 'scheduled' END,last_code=CASE WHEN state='recovery_required' THEN last_code ELSE NULL END WHERE store_id=? AND device_id=?",[store_id,device_id]);},
       status:async()=>{
         const state=one<{download_cursor:string;last_contact_at:string|null;last_receipt_at:string|null;retry_requested_at:string|null}>('SELECT * FROM sync_state WHERE store_id=? AND device_id=?',[store_id,device_id]);
         if(!state)throw new Error('SYNC_NOT_INITIALIZED');

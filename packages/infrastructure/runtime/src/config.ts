@@ -61,7 +61,7 @@ export function loadLocalConfig(env: Environment) {
   }
   if(env.LOCAL_SYNC_ENABLED!==undefined&&!['true','false'].includes(env.LOCAL_SYNC_ENABLED))throw new ConfigurationError('LOCAL_SYNC_ENABLED');
   if(env.LOCAL_SYNC_ENABLED==='true'&&(!env.AUTH_API_ORIGIN||databasePath===':memory:'))throw new ConfigurationError('AUTH_API_ORIGIN');
-  return { ...base, databasePath,syncEnabled:env.LOCAL_SYNC_ENABLED==='true',syncPollMs:integer(env,'LOCAL_SYNC_POLL_MS',5000,1000,60000), identity: storeId && deviceId ? { store_id: storeId, device_id: deviceId } : undefined };
+  return { ...base, backupIntervalHours:integer(env,'BACKUP_INTERVAL_HOURS',24,1,168), databasePath,syncEnabled:env.LOCAL_SYNC_ENABLED==='true',syncPollMs:integer(env,'LOCAL_SYNC_POLL_MS',5000,1000,60000), identity: storeId && deviceId ? { store_id: storeId, device_id: deviceId } : undefined };
 }
 
 export function loadWorkerConfig(env: Environment) {

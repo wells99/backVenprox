@@ -64,7 +64,8 @@ export class MysqlStore {
             try {
             // DDL tem commit implícito. Após queda, verificar o objeto antes de repetir.
             if (step.sql.startsWith('CREATE INDEX')) {
-              const [indexes] = await connection.query<RowDataPacket[]>("SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND INDEX_NAME='outbox_pending'", [step.table]);
+              const indexName=/^CREATE INDEX ([a-z_]+) ON /.exec(step.sql)?.[1];if(!indexName)throw new PersistenceError('SCHEMA_INCOMPATIBLE');
+              const [indexes] = await connection.query<RowDataPacket[]>('SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND INDEX_NAME=?', [step.table,indexName]);
               if (!indexes.length) await connection.query(step.sql);
             } else if (step.checkColumn) {
               const [existing]=await connection.query<RowDataPacket[]>('SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME=?',[step.table,step.checkColumn]);
